@@ -1,6 +1,9 @@
 {% extends "default.j2" %}
 {% block title %}App dashboard{% endblock %}
 {% block content %}
+  {% if picture %}
+    <img class="avatar" src="{{ picture }}" />
+  {% endif %}
   Your user id is: {{ uid }}
   <br /><br />
   Connected authentication providers:

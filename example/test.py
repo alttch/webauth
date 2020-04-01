@@ -32,7 +32,8 @@ def serve_tpl(tpl_file, **kwargs):
     tpl = tenv.get_template(f'{tpl_file}.j2')
     d = {
         'authenticated': webauth.is_authenticated(),
-        'uid': webauth.get_user_id()
+        'uid': webauth.get_user_id(),
+        'picture': webauth.get_user_picture()
     }
     d.update(kwargs)
     return tpl.render(d)

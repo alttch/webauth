@@ -189,6 +189,13 @@ def get_user_id():
     return session.get(f'{_d.x_prefix}user_id')
 
 
+def get_user_picture():
+    """
+    Get picture of current logged in user
+    """
+    return session.get(f'{_d.x_prefix}user_picture')
+
+
 def is_authenticated():
     """
     True if user is logged in
@@ -198,6 +205,8 @@ def is_authenticated():
 
 def _handle_user_auth(user_info, provider):
     user_id = get_user_id()
+    from pprint import pprint
+    pprint(user_info)
     result = _d.dbconn_func().execute(sql(rq('user.oauth.get')),
                                       sub=user_info.sub,
                                       provider=provider).fetchone()
@@ -212,8 +221,7 @@ def _handle_user_auth(user_info, provider):
                                  id=user_id,
                                  provider=provider,
                                  sub=user_info.sub,
-                                 name=user_info.name,
-                                 picture=user_info.picture)
+                                 name=user_info.name)
         _call_handler('register', user_id=user_id, user_info=user_info)
     else:
         if user_id and result.id != user_id:
@@ -251,10 +259,11 @@ def _next_uri():
 
 def logout():
     result = _call_handler('logout')
-    try:
-        del session[f'{_d.x_prefix}user_id']
-    except KeyError:
-        pass
+    for i in ('id', 'picture'):
+        try:
+            del session[f'{_d.x_prefix}user_{i}']
+        except KeyError:
+            pass
     return redirect(_next_uri()) if result is None else result
 
 
@@ -297,7 +306,6 @@ def init(app,
             Column('provider', VARCHAR(15), nullable=False),
             Column('sub', VARCHAR(255), nullable=False),
             Column('name', VARCHAR(255), nullable=True),
-            Column('picture', VARCHAR(255), nullable=True),
             Index('webauth_user_auth_sub_provider',
                   'sub',
                   'provider',
@@ -316,6 +324,7 @@ def init(app,
                 session[f'{_d.x_prefix}user_id'] = _handle_user_auth(
                     user_info,
                     provider=remote if isinstance(remote, str) else remote.name)
+                session[f'{_d.x_prefix}user_picture'] = user_info.picture
                 return redirect(_next_uri())
             except ResourceAlreadyExists:
                 response = _call_handler('exception.provider_exists')
