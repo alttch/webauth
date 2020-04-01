@@ -15,6 +15,7 @@ setuptools.setup(
     long_description_content_type='text/markdown',
     url='https://github.com/alttch/webauth',
     packages=setuptools.find_packages(),
+    include_package_data=True,
     license='MIT',
     install_requires=['pyaltt2>=0.0.65'],
     classifiers=(
