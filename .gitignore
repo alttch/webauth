@@ -3,5 +3,6 @@ webauth.egg-info
 build
 dist
 Makefile
+example/config.yml
 .idea/
 *.pyc

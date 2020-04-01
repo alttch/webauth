@@ -3,6 +3,8 @@ __copyright__ = 'Copyright (C) 2020 Altertech'
 __license__ = 'MIT'
 __version__ = '0.0.1'
 
+# TODO: docs
+
 from flask import redirect, session, url_for, Response
 from authlib.flask.client import OAuth
 from pyaltt2.config import config_value

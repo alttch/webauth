@@ -6,18 +6,12 @@ import sqlalchemy
 import pyaltt2.db
 import jinja2
 from flask import Flask, redirect, request
+from pyaltt2.config import load_yaml
 
 tldr = jinja2.FileSystemLoader(searchpath='./templates/')
 tenv = jinja2.Environment(loader=tldr)
 
-config = {}
-config['GITHUB_CLIENT_ID'] = '5303f3cddd986e45daa7'
-config['GITHUB_CLIENT_SECRET'] = 'ca7130a81bc614c383e8ce685cb6b3a7bd4665cf'
-config['FACEBOOK_CLIENT_ID'] = '1808754035921226'
-config['FACEBOOK_CLIENT_SECRET'] = 'dcf1e37fcd99ec7f1efdb7bef9eac5a8'
-config[
-    'GOOGLE_CLIENT_ID'] = '385304704230-lsufchnaq4j3iaqcimoq597i4a9jc0qp.apps.googleusercontent.com'
-config['GOOGLE_CLIENT_SECRET'] = '2G-gFEWXEZn7-SbvcGK98rxZ'
+config = load_yaml('config.yml')
 
 app = Flask(__name__)
 
