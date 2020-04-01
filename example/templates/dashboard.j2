@@ -1,0 +1,22 @@
+{% extends "default.j2" %}
+{% block title %}App dashboard{% endblock %}
+{% block content %}
+  Your user id is: {{ uid }}
+  <br /><br />
+  Connected authentication providers:
+  {% for p in providers %}
+    <div>
+      <img class="social" src="/static/icons/{{ p.provider }}.png" /> {{ p.name }}
+      [ <a href="/delete-provider?provider={{ p.provider }}&sub={{ p.sub }}">Remove</a> ]
+    </div>
+  {% endfor %}
+  <br />
+  Connect more providers:
+    <div>
+      <a href="/oauth-login/google"><img class="social" src="/static/icons/google.png"></a>
+      <a href="/oauth-login/facebook"><img class="social" src="/static/icons/facebook.png"></a>
+      <a href="/oauth-login/github"><img class="social" src="/static/icons/github.png"></a>
+    </div>
+  <br />
+  <input type="button" value="DELETE MY ACCOUNT" onclick="document.location='/delete-account'" />
+{% endblock %}

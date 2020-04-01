@@ -1,0 +1,6 @@
+{% extends "default.j2" %}
+{% block title %}ERROR{% endblock %}
+{% block content %}
+  {{ message }}
+  <input type="button" value="OK" onclick="document.location='{{ next }}'" />
+{% endblock %}

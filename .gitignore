@@ -1,0 +1,7 @@
+__pycache__
+webauth.egg-info
+build
+dist
+Makefile
+.idea/
+*.pyc

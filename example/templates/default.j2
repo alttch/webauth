@@ -1,0 +1,28 @@
+<html>
+  <head>
+    <title>{% block title %}{% endblock %}</title>
+    <style type="text/css">
+img.social {
+  width: 32px; height: 32px;
+}
+      body {
+        font-size: 18px;
+        font-family: Verdana, Arial, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="menu">
+      [
+      <a href="/">Home</a>
+      {% if authenticated %}
+        | <a href="/dashboard">Dashboard</a>
+        | <a href="/auth/logout">Logout</a>
+      {% endif %}
+      ]
+    </div>
+    <div id="content">
+      {% block content %}{% endblock %}
+    </div>
+  </body>
+</html>

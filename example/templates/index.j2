@@ -1,0 +1,15 @@
+{% extends "default.j2" %}
+{% block title %}Welcome{% endblock %}
+{% block content %}
+  THIS IS OUR TEST WEBSITE
+  {% if not authenticated %}
+    <br />
+    <br />
+    <b>Please login</b>
+    <div>
+      <a href="/oauth-login/google"><img class="social" src="/static/icons/google.png"></a>
+      <a href="/oauth-login/facebook"><img class="social" src="/static/icons/facebook.png"></a>
+      <a href="/oauth-login/github"><img class="social" src="/static/icons/github.png"></a>
+    </div>
+  {% endif %}
+{% endblock %}
