@@ -66,15 +66,19 @@ def register_handler(event, handler):
     Register event handler
 
     Events:
-        register: new user registration
+        register: new user registration (user_id=user_id)
+        delete: user account deletion (user_id=user_id)
         logout: logout event
 
         exception.provider_exists: attempt to register with oauth provider
             which's already assigned to another user
         exception.provider_failed: oauth provider registration failure
+        exception.registration_denied: account registration attempt when
+            allow_registration is False
 
-    For handlers: exception.provider_exists, exception.provider_failed, logout,
-    if not None value is returned, it's returned by web method as-is
+    For handlers: exception.provider_exists, exception.provider_failed,
+    exception.registration_denied, logout, if not None value is returned, it's
+    returned by web method as-is
     """
     handlers[event] = handler
 
@@ -174,6 +178,7 @@ def delete_user():
     """
     user_id = get_user_id()
     if user_id:
+        _call_handler('delete', user_id=user_id)
         if not _d.dbconn_func().execute(sql(rq('user.delete')),
                                         id=user_id).rowcount:
             raise LookupError
@@ -332,6 +337,10 @@ def init(app,
                     'oauth provider is already ' +
                     'registered for another account',
                     status=409)
+            except AccessDenied:
+                response = _call_handler('exception.registration_denied')
+                return response if response else Response(
+                    'account registration is disabled', status=403)
             # session.permanent = True
         else:
             response = _call_handler('exception.provider_failed')
