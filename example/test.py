@@ -3,10 +3,10 @@ sys.path.insert(0, '..')
 
 import webauth
 import sqlalchemy
-import pyaltt2.db
 import jinja2
 from flask import Flask, redirect, request
 from pyaltt2.config import load_yaml
+from pyaltt2.db import Database
 
 tldr = jinja2.FileSystemLoader(searchpath='./templates/')
 tenv = jinja2.Environment(loader=tldr)
@@ -15,9 +15,9 @@ config = load_yaml('config.yml')
 
 app = Flask(__name__)
 
-pyaltt2.db.create_engine('postgresql://test:123@localhost/test')
+db = Database('postgresql://test:123@localhost/test')
 
-webauth.init(app, dbconn_func=pyaltt2.db.get_db, config=config)
+webauth.init(app, db=db, config=config)
 webauth.register_handler(
     'exception.provider_exists',
     lambda: serve_tpl('error',

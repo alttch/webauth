@@ -12,7 +12,6 @@ from pyaltt2.crypto import gen_random_str
 from pyaltt2.res import ResourceStorage
 import pyaltt2.json as json
 from types import SimpleNamespace
-from sqlalchemy import text as sql
 from functools import partial
 import loginpass
 
@@ -112,10 +111,9 @@ def set_user_password(password):
     from hashlib import sha256
     user_id = get_user_id()
     if user_id:
-        if not _db.dbconn_func().execute(
-                sql(rq('user.password.set')),
-                id=user_id,
-                password=sha256(password).hexdigest()).rowcount:
+        if not _d.db.query('user.password.set',
+                           id=user_id,
+                           password=sha256(password).hexdigest()).rowcount:
             raise LookupError
     else:
         raise AccessDenied
@@ -133,8 +131,7 @@ def get_user_providers():
     if user_id:
         return [
             dict(row)
-            for row in _d.dbconn_func().execute(sql(rq('user.provider.list')),
-                                                id=user_id).fetchall()
+            for row in _d.db.query('user.provider.list', id=user_id).fetchall()
         ]
     else:
         raise AccessDenied
@@ -151,16 +148,15 @@ def delete_user_provider(provider, sub):
     """
     user_id = get_user_id()
     if user_id:
-        if _d.dbconn_func().execute(sql(rq('user.provider.count.except')),
-                                    id=user_id,
-                                    provider=provider,
-                                    sub=sub).fetchone().c < 1:
+        if _d.db.query('user.provider.count.except',
+                       id=user_id,
+                       provider=provider,
+                       sub=sub).fetchone().c < 1:
             raise ResourceBusy
         else:
-            if not _d.dbconn_func().execute(sql(rq('user.provider.delete')),
-                                            id=user_id,
-                                            provider=provider,
-                                            sub=sub).rowcount:
+            if not _d.db.query(
+                    'user.provider.delete', id=user_id, provider=provider,
+                    sub=sub).rowcount:
                 raise LookupError
     else:
         raise AccessDenied
@@ -179,8 +175,7 @@ def delete_user():
     user_id = get_user_id()
     if user_id:
         _call_handler('delete', user_id=user_id)
-        if not _d.dbconn_func().execute(sql(rq('user.delete')),
-                                        id=user_id).rowcount:
+        if not _d.db.query('user.delete', id=user_id).rowcount:
             raise LookupError
         return logout()
     else:
@@ -210,23 +205,19 @@ def is_authenticated():
 
 def _handle_user_auth(user_info, provider):
     user_id = get_user_id()
-    from pprint import pprint
-    pprint(user_info)
-    result = _d.dbconn_func().execute(sql(rq('user.oauth.get')),
-                                      sub=user_info.sub,
-                                      provider=provider).fetchone()
+    result = _d.db.query('user.oauth.get', sub=user_info.sub,
+                         provider=provider).fetchone()
     if result is None:
         if not user_id:
             if allow_registration:
-                user_id = _d.dbconn_func().execute(sql(
-                    rq('user.create.empty'))).fetchone().id
+                user_id = _d.db.query('user.create.empty').fetchone().id
             else:
                 raise AccessDenied
-        _d.dbconn_func().execute(sql(rq('user.provider.create')),
-                                 id=user_id,
-                                 provider=provider,
-                                 sub=user_info.sub,
-                                 name=user_info.name)
+        _d.db.query('user.provider.create',
+                    id=user_id,
+                    provider=provider,
+                    sub=user_info.sub,
+                    name=user_info.name)
         _call_handler('register', user_id=user_id, user_info=user_info)
     else:
         if user_id and result.id != user_id:
@@ -273,18 +264,28 @@ def logout():
 
 
 def init(app,
-         dbconn_func,
+         db,
          config,
          base_prefix='/auth',
          root_uri='/',
          providers=['google', 'facebook', 'github'],
          fix_ssl=True):
+    """
+    Args:
+        app: Flask app
+        db: pyaltt2.db.Database object
+        config: configuration dict
+        base_prefix: base prefix for auth urls
+        root_uri: default next uri
+        providers: oauth2 providers list
+    """
 
     if not app.config.get('SECRET_KEY'):
         app.config['SECRET_KEY'] = gen_random_str()
 
     _d.x_prefix, _d.dot_prefix = _format_prefix(base_prefix)
-    _d.dbconn_func = dbconn_func
+    _d.db = db.clone()
+    _d.db.rq_func = rq
     _d.root_uri = root_uri
 
     if fix_ssl:
@@ -315,7 +316,7 @@ def init(app,
                   'sub',
                   'provider',
                   unique=True))
-        meta.create_all(dbconn_func())
+        meta.create_all(db.connect())
 
     # TODO
     # register with email (+ confirmation)
