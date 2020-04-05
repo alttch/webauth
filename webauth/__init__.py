@@ -333,7 +333,7 @@ def init(app,
     # register with email (+ confirmation)
     # login with email
     # reset password with email
-    # check password API method
+    # set email / password to oauth accounts
     # cleanup kv and unconfirmed
 
     def handle_authorize(remote, token, user_info):
