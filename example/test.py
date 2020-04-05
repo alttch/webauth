@@ -33,6 +33,7 @@ def serve_tpl(tpl_file, **kwargs):
     d = {
         'authenticated': webauth.is_authenticated(),
         'uid': webauth.get_user_id(),
+        'confirmed': webauth.is_confirmed(),
         'picture': webauth.get_user_picture()
     }
     d.update(kwargs)

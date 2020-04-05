@@ -4,7 +4,7 @@
   {% if picture %}
     <img class="avatar" src="{{ picture }}" />
   {% endif %}
-  Your user id is: {{ uid }}
+  Your user id is: {{ uid }} {% if confirmed %}(CONFIRMED){% endif %}
   <br /><br />
   Connected authentication providers:
   {% for p in providers %}

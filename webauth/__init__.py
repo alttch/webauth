@@ -10,6 +10,7 @@ from authlib.flask.client import OAuth
 from pyaltt2.config import config_value
 from pyaltt2.crypto import gen_random_str
 from pyaltt2.res import ResourceStorage
+from pyaltt2.db import KVStorage
 import pyaltt2.json as json
 from types import SimpleNamespace
 from functools import partial
@@ -203,6 +204,10 @@ def is_authenticated():
     return get_user_id() is not None
 
 
+def is_confirmed():
+    return session.get(f'{_d.x_prefix}user_confirmed', False)
+
+
 def _handle_user_auth(user_info, provider):
     user_id = get_user_id()
     result = _d.db.query('user.oauth.get', sub=user_info.sub,
@@ -286,6 +291,7 @@ def init(app,
     _d.x_prefix, _d.dot_prefix = _format_prefix(base_prefix)
     _d.db = db.clone()
     _d.db.rq_func = rq
+    _d.kv = KVStorage(db=db, table_name='webauth_kv')
     _d.root_uri = root_uri
 
     if fix_ssl:
@@ -294,13 +300,15 @@ def init(app,
 
     def init_db():
         from sqlalchemy import (MetaData, Table, Column, BigInteger, VARCHAR,
-                                JSON, CHAR, DateTime, ForeignKey, Index)
+                                JSON, CHAR, DateTime, ForeignKey, Index,
+                                Boolean)
         meta = MetaData()
         user = Table(
             'webauth_user', meta,
             Column('id', BigInteger(), primary_key=True, autoincrement=True),
             Column('email', VARCHAR(255), nullable=True),
-            Column('password', VARCHAR(64), nullable=True))
+            Column('password', VARCHAR(64), nullable=True),
+            Column('confirmed', Boolean, nullable=False, server_default='0'))
         user_auth = Table(
             f'webauth_user_auth', meta,
             Column('id', BigInteger(), primary_key=True, autoincrement=True),
@@ -331,6 +339,7 @@ def init(app,
                     user_info,
                     provider=remote if isinstance(remote, str) else remote.name)
                 session[f'{_d.x_prefix}user_picture'] = user_info.picture
+                session[f'{_d.x_prefix}user_confirmed'] = True
                 return redirect(_next_uri())
             except ResourceAlreadyExists:
                 response = _call_handler('exception.provider_exists')
