@@ -11,10 +11,10 @@ from pyaltt2.config import config_value
 from pyaltt2.crypto import gen_random_str
 from pyaltt2.res import ResourceStorage
 from pyaltt2.db import KVStorage
-import pyaltt2.json as json
+import loginpass
+import datetime
 from types import SimpleNamespace
 from functools import partial
-import loginpass
 
 
 class AccessDenied(Exception):
@@ -215,7 +215,9 @@ def _handle_user_auth(user_info, provider):
     if result is None:
         if not user_id:
             if allow_registration:
-                user_id = _d.db.query('user.create.empty').fetchone().id
+                user_id = _d.db.query(
+                    'user.create.empty',
+                    d_created=datetime.datetime.now()).fetchone().id
             else:
                 raise AccessDenied
         _d.db.query('user.provider.create',
@@ -308,6 +310,7 @@ def init(app,
             Column('id', BigInteger(), primary_key=True, autoincrement=True),
             Column('email', VARCHAR(255), nullable=True),
             Column('password', VARCHAR(64), nullable=True),
+            Column('d_created', DateTime(timezone=True), nullable=False),
             Column('confirmed', Boolean, nullable=False, server_default='0'))
         user_auth = Table(
             f'webauth_user_auth', meta,
@@ -331,6 +334,7 @@ def init(app,
     # login with email
     # reset password with email
     # check password API method
+    # cleanup kv and unconfirmed
 
     def handle_authorize(remote, token, user_info):
         if user_info:
