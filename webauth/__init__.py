@@ -285,8 +285,18 @@ def logout():
     return redirect(_next_uri()) if result is None else result
 
 
-def touch(user_id):
-    _d.db.query('user.touch', id=user_id, d=datetime.datetime.now())
+def _send_confirmation_email(user_id, email, next_uri_confirm=None):
+    tpl = email_tpl['confirm.email']
+    link = generate_confirm(method='confirm.email',
+                            user_id=user_id,
+                            email=email,
+                            expires=tpl['expires'],
+                            next_uri=next_uri_confirm)
+    _d.smtp.sendmail(email_sender,
+                     email,
+                     subject=tpl['subject'],
+                     text=tpl['text'].format(confirm_link=link),
+                     html=tpl['html'].format(confirm_link=link))
 
 
 def register(email, password, confirmed=True, next_uri_confirm=None):
@@ -305,18 +315,38 @@ def register(email, password, confirmed=True, next_uri_confirm=None):
     session[f'{_d.x_prefix}user_id'] = user_id
     session[f'{_d.x_prefix}user_confirmed'] = confirmed
     if not confirmed:
-        tpl = email_tpl['confirm.email']
-        link = generate_confirm(method='confirm.email',
-                                user_id=user_id,
-                                email=email,
-                                expires=tpl['expires'],
-                                next_uri=next_uri_confirm)
-        _d.smtp.sendmail(email_sender,
-                         email,
-                         subject=tpl['subject'],
-                         text=tpl['text'].format(confirm_link=link),
-                         html=tpl['html'].format(confirm_link=link))
+        _send_confirmation_email(user_id=user_id,
+                                 email=email,
+                                 next_uri_confirm=next_uri_confirm)
+
     return redirect(_next_uri())
+
+
+def get_user_email():
+    return _d.db.query("user.select.email",
+                       id=session[f'{_d.x_prefix}user_id']).fetchone().email
+
+
+def resend_email_confirm(next_uri_confirm=None):
+    _send_confirmation_email(user_id=session[f'{_d.x_prefix}user_id'],
+                             email=get_user_email(),
+                             next_uri_confirm=next_uri_confirm)
+
+
+def login(email, password):
+    """
+    Raises:
+        webauth.AccessDenied: invalid credentials
+    """
+    user = _d.db.query("user.select.id",
+                       email=email,
+                       password=sha256(
+                           password.encode()).hexdigest()).fetchone()
+    if user:
+        session[f'{_d.x_prefix}user_id'] = user.id
+        session[f'{_d.x_prefix}user_confirmed'] = user.confirmed
+    else:
+        raise AccessDenied
 
 
 def generate_confirm(method, expires=None, next_uri=None, **kwargs):
@@ -393,7 +423,6 @@ def init(app,
             Column('email', VARCHAR(255), nullable=True, unique=True),
             Column('password', VARCHAR(64), nullable=True),
             Column('d_created', DateTime(timezone=True), nullable=False),
-            Column('d_active', DateTime(timezone=True), nullable=True),
             Column('confirmed', Boolean, nullable=False, server_default='0'))
         user_auth = Table(
             f'webauth_user_auth', meta,
@@ -413,10 +442,11 @@ def init(app,
         meta.create_all(db.connect())
 
     # TODO
-    # login with email
     # re-send confirmation email
     # reset password with email
     # set email / password to oauth accounts
+    # change email
+    # change password
     # cleanup kv and unconfirmed
 
     def handle_authorize(remote, token, user_info):
@@ -425,7 +455,6 @@ def init(app,
                 user_id = _handle_user_auth(
                     user_info,
                     provider=remote if isinstance(remote, str) else remote.name)
-                touch(user_id)
                 session[f'{_d.x_prefix}user_id'] = user_id
                 session[f'{_d.x_prefix}user_picture'] = user_info.picture
                 session[f'{_d.x_prefix}user_confirmed'] = True

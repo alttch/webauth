@@ -46,10 +46,29 @@ def index():
     return serve_tpl('index')
 
 
+@app.route('/login', methods=['POST'])
+def login():
+    email = request.form.get('email')
+    password = request.form.get('password')
+    try:
+        webauth.login(email, password)
+        return redirect('/dashboard')
+    except webauth.AccessDenied:
+        return serve_tpl('error', message='Access denied', next_uri='/')
+
+
+@app.route('/resend-confirm')
+def resend_confirm():
+    webauth.resend_email_confirm(next_uri_confirm='/dashboard')
+    return redirect('/dashboard')
+
+
 @app.route('/dashboard')
 def dashboard():
     if webauth.is_authenticated():
-        return serve_tpl('dashboard', providers=webauth.get_user_providers())
+        return serve_tpl('dashboard',
+                         providers=webauth.get_user_providers(),
+                         email=webauth.get_user_email())
     else:
         return redirect('/')
 

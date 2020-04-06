@@ -4,7 +4,12 @@
   {% if picture %}
     <img class="avatar" src="{{ picture }}" />
   {% endif %}
-  Your user id is: {{ uid }} {% if confirmed %}(CONFIRMED){% endif %}
+  Your user id is: {{ uid }}
+  {% if confirmed %}
+    (CONFIRMED)
+  {% else %}
+    (UNCONFIRMED <a href="/resend-confirm">re-send confirmation email</a>)
+  {% endif %}
   <br /><br />
   Connected authentication providers:
   {% for p in providers %}
@@ -14,12 +19,14 @@
     </div>
   {% endfor %}
   <br />
+  E-Mail: {{ email }}
+  <br />
   Connect more providers:
-    <div>
-      <a href="/oauth-login/google"><img class="social" src="/static/icons/google.png"></a>
-      <a href="/oauth-login/facebook"><img class="social" src="/static/icons/facebook.png"></a>
-      <a href="/oauth-login/github"><img class="social" src="/static/icons/github.png"></a>
-    </div>
+  <div>
+    <a href="/oauth-login/google"><img class="social" src="/static/icons/google.png"></a>
+    <a href="/oauth-login/facebook"><img class="social" src="/static/icons/facebook.png"></a>
+    <a href="/oauth-login/github"><img class="social" src="/static/icons/github.png"></a>
+  </div>
   <br />
   <input type="button" value="DELETE MY ACCOUNT" onclick="document.location='/delete-account'" />
 {% endblock %}
