@@ -24,9 +24,9 @@ email_tpl = {
         'subject':
             'Please confirm your email address',
         'text':
-            'Please click on the link {link} to confirm your email address',
+            'Please click on the link {confirm_link} to confirm your email address',
         'html':
-            '<html><body>Please click <a href="{link}">here</a> to confirm your email address </body></html>',
+            '<html><body>Please click <a href="{confirm_link}">here</a> to confirm your email address </body></html>',
         'expires':
             86400
     }
@@ -314,8 +314,8 @@ def register(email, password, confirmed=True, next_uri_confirm=None):
         _d.smtp.sendmail(email_sender,
                          email,
                          subject=tpl['subject'],
-                         text=tpl['text'].format(link=link),
-                         html=tpl['html'].format(link=link))
+                         text=tpl['text'].format(confirm_link=link),
+                         html=tpl['html'].format(confirm_link=link))
     return redirect(_next_uri())
 
 
