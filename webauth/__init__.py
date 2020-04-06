@@ -5,7 +5,7 @@ __version__ = '0.0.1'
 
 # TODO: docs
 
-from flask import redirect, session, url_for, Response
+from flask import redirect, session, url_for, Response, request
 from authlib.flask.client import OAuth
 from pyaltt2.config import config_value
 from pyaltt2.crypto import gen_random_str
@@ -51,6 +51,10 @@ _d = SimpleNamespace()
 
 allow_registration = True
 
+real_ip_header = None
+
+log_user_events = True
+
 rs = ResourceStorage(mod='webauth')
 
 rq = partial(rs.get, resource_subdir='sql', ext='sql')
@@ -75,6 +79,12 @@ _provider_mod = {
     'twitch': loginpass.Twitch,
     'vk': loginpass.VK
 }
+
+
+def http_real_ip():
+    return request.headers.get(
+        real_ip_header,
+        request.remote_addr) if real_ip_header else request.remote_addr
 
 
 def register_handler(event, handler):
@@ -102,6 +112,15 @@ def register_handler(event, handler):
 def _call_handler(event, **kwargs):
     h = handlers.get(event)
     return h(**kwargs) if h else None
+
+
+def _log_user_event(event):
+    if log_user_events:
+        _d.db.query('user.log.event',
+                    id=get_user_id(),
+                    event=event,
+                    ip=http_real_ip(),
+                    d=datetime.datetime.now())
 
 
 def _format_prefix(base_prefix):
@@ -285,6 +304,10 @@ def logout():
     return redirect(_next_uri()) if result is None else result
 
 
+def touch(user_id):
+    _d.db.query('user.touch', id=user_id, d=datetime.datetime.now())
+
+
 def _send_confirmation_email(user_id, email, next_uri_confirm=None):
     tpl = email_tpl['confirm.email']
     link = generate_confirm(method='confirm.email',
@@ -314,6 +337,7 @@ def register(email, password, confirmed=True, next_uri_confirm=None):
         raise ResourceAlreadyExists(e)
     session[f'{_d.x_prefix}user_id'] = user_id
     session[f'{_d.x_prefix}user_confirmed'] = confirmed
+    _log_user_event('register')
     if not confirmed:
         _send_confirmation_email(user_id=user_id,
                                  email=email,
@@ -343,8 +367,10 @@ def login(email, password):
                        password=sha256(
                            password.encode()).hexdigest()).fetchone()
     if user:
+        touch(user.id)
         session[f'{_d.x_prefix}user_id'] = user.id
         session[f'{_d.x_prefix}user_confirmed'] = user.confirmed
+        _log_user_event('login')
     else:
         raise AccessDenied
 
@@ -378,6 +404,7 @@ def confirm_user(user_id, email):
         raise LookupError
     session[f'{_d.x_prefix}user_id'] = user_id
     session[f'{_d.x_prefix}user_confirmed'] = True
+    _log_user_event(f'confirm.email:{email}')
 
 
 def init(app,
@@ -423,6 +450,7 @@ def init(app,
             Column('email', VARCHAR(255), nullable=True, unique=True),
             Column('password', VARCHAR(64), nullable=True),
             Column('d_created', DateTime(timezone=True), nullable=False),
+            Column('d_active', DateTime(timezone=True), nullable=True),
             Column('confirmed', Boolean, nullable=False, server_default='0'))
         user_auth = Table(
             f'webauth_user_auth', meta,
@@ -439,10 +467,17 @@ def init(app,
                   'sub',
                   'provider',
                   unique=True))
+        user_log = Table(
+            f'webauth_user_log', meta,
+            Column('id', BigInteger(), primary_key=True, autoincrement=True),
+            Column('user_id', BigInteger(), nullable=False),
+            Index('webauth_user_log_user_id', 'user_id'),
+            Column('d', DateTime(timezone=True), nullable=False),
+            Column('event', VARCHAR(25), nullable=False),
+            Column('ip', VARCHAR(45), nullable=False))
         meta.create_all(db.connect())
 
     # TODO
-    # re-send confirmation email
     # reset password with email
     # set email / password to oauth accounts
     # change email
@@ -452,12 +487,13 @@ def init(app,
     def handle_authorize(remote, token, user_info):
         if user_info:
             try:
-                user_id = _handle_user_auth(
-                    user_info,
-                    provider=remote if isinstance(remote, str) else remote.name)
+                provider = remote if isinstance(remote, str) else remote.name
+                user_id = _handle_user_auth(user_info, provider=provider)
+                touch(user_id)
                 session[f'{_d.x_prefix}user_id'] = user_id
                 session[f'{_d.x_prefix}user_picture'] = user_info.picture
                 session[f'{_d.x_prefix}user_confirmed'] = True
+                _log_user_event(f'login:{provider}')
                 return redirect(_next_uri())
             except ResourceAlreadyExists:
                 response = _call_handler('exception.provider_exists')
