@@ -4,6 +4,7 @@ __license__ = 'MIT'
 __version__ = '0.0.1'
 
 # TODO: docs
+# TODO: logging
 
 from flask import redirect, session, url_for, Response, request
 from authlib.flask.client import OAuth
@@ -41,24 +42,13 @@ email_tpl = {
     }
 }
 
-
-class AccessDenied(Exception):
-    pass
-
-
-class ResourceAlreadyExists(Exception):
-    pass
-
-
-class ResourceBusy(Exception):
-    pass
-
-
 handlers = {}
 
 _d = SimpleNamespace()
 
 allow_registration = True
+
+user_unconfirmed_expires = 86400
 
 real_ip_header = None
 
@@ -88,6 +78,18 @@ _provider_mod = {
     'twitch': loginpass.Twitch,
     'vk': loginpass.VK
 }
+
+
+class AccessDenied(Exception):
+    pass
+
+
+class ResourceAlreadyExists(Exception):
+    pass
+
+
+class ResourceBusy(Exception):
+    pass
 
 
 def http_real_ip():
@@ -196,9 +198,9 @@ def delete_user_provider(provider, sub):
     if user_id:
         _log_user_event(f'delete:{provider}')
         if not get_user_email() and _d.db.query('user.provider.count.except',
-                                               id=user_id,
-                                               provider=provider,
-                                               sub=sub).fetchone().c < 1:
+                                                id=user_id,
+                                                provider=provider,
+                                                sub=sub).fetchone().c < 1:
             raise ResourceBusy
         else:
             if not _d.db.query(
@@ -374,8 +376,16 @@ def register(email, password, confirmed=True, next_action_uri=None):
 
 
 def get_user_email():
-    return _d.db.query("user.select.email",
-                       id=session[f'{_d.x_prefix}user_id']).fetchone().email
+    """
+    Raises:
+        webauth.AccessDenied: if user no longer exists in database
+    """
+    user = _d.db.query("user.select.email",
+                       id=session[f'{_d.x_prefix}user_id']).fetchone()
+    if user:
+        return user.email
+    else:
+        raise AccessDenied
 
 
 def resend_email_confirm(next_action_uri=None):
@@ -602,6 +612,15 @@ def init(app,
             app.register_blueprint(blueprint, url_prefix=f'{base_prefix}/{p}')
     init_db()
     return
+
+
+def cleanup():
+    _d.kv.cleanup()
+    _d.db.query(
+        'user.delete.unconfirmed',
+        d=datetime.datetime.now() -
+        datetime.timedelta(seconds=user_unconfirmed_expires) if isinstance(
+            user_unconfirmed_expires, int) else user_unconfirmed_expires)
 
 
 external_actions = {

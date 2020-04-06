@@ -19,6 +19,7 @@ app = Flask(__name__)
 db = Database('postgresql://test:123@localhost/test')
 
 webauth.init(app, db=db, config=config, smtp=SMTP(host='10.90.1.8'))
+webauth.user_unconfirmed_expires = 10
 webauth.register_handler(
     'exception.provider_exists',
     lambda: serve_tpl('error',
