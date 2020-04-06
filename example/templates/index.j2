@@ -5,11 +5,57 @@
   {% if not authenticated %}
     <br />
     <br />
+    [ <a href="#" onclick="showLogin();">LOGIN</a> | <a href="#" onclick="showRegister()">Register</a> ]<br />
     <b>Please login</b>
     <div>
       <a href="/oauth-login/google"><img class="social" src="/static/icons/google.png"></a>
       <a href="/oauth-login/facebook"><img class="social" src="/static/icons/facebook.png"></a>
       <a href="/oauth-login/github"><img class="social" src="/static/icons/github.png"></a>
     </div>
+    <div id="loginform">
+      <form action="/login" method="POST">
+        E-mail <input id="email" type="text" name="email" /><br />
+        Password <input type="password" name="password" /><br />
+        <input type="submit" value="GO" />
+      </form>
+    </div>
+    <div id="registerform" style="display: none">
+      <div id="error" style="color: red"></div>
+      <form action="/register" name="reg" method="POST" onsubmit="event.preventDefault(); validatereg()">
+        E-mail <input id="email_reg" type="text" name="email" /><br />
+        Password <input type="password" id="password" name="password" /><br />
+        Confirm password <input type="password" id="password2" name="password2" /><br />
+        <input type="submit" value="Register" />
+      </form>
+    </div>
+    <script>
+      document.getElementById("email").focus();
+
+      function showLogin() {
+        document.getElementById("registerform").style.display='none'
+        document.getElementById("loginform").style.display='block'
+      }
+
+      function showRegister() {
+        document.getElementById("loginform").style.display='none'
+        document.getElementById("registerform").style.display='block'
+      }
+
+      function validatereg() {
+        let err = '';
+        if (document.getElementById('password').value != document.getElementById('password2').value) {
+            err = 'passwords do not match'
+        } else if (!document.getElementById('email_reg').value || !document.getElementById('password').value) {
+            err = 'please fill all fields'
+        }
+        if (!err) {
+          document.forms["reg"].submit();
+          return true;
+        } else {
+          document.getElementById('error').innerHTML = err;
+          return false;
+        }
+      }
+    </script>
   {% endif %}
 {% endblock %}

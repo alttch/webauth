@@ -13,8 +13,24 @@ from pyaltt2.res import ResourceStorage
 from pyaltt2.db import KVStorage
 import loginpass
 import datetime
+import sqlalchemy
 from types import SimpleNamespace
 from functools import partial
+from hashlib import sha256
+
+email_sender = 'webauth-test@lab.altt.ch'
+email_tpl = {
+    'confirm.email': {
+        'subject':
+            'Please confirm your email address',
+        'text':
+            'Please click on the link {link} to confirm your email address',
+        'html':
+            '<html><body>Please click <a href="{link}">here</a> to confirm your email address </body></html>',
+        'expires':
+            86400
+    }
+}
 
 
 class AccessDenied(Exception):
@@ -77,8 +93,8 @@ def register_handler(event, handler):
             allow_registration is False
 
     For handlers: exception.provider_exists, exception.provider_failed,
-    exception.registration_denied, logout, if not None value is returned, it's
-    returned by web method as-is
+    exception.registration_denied, logout, confirm, exception.confirm_nokey if
+    not None value is returned, it's returned by web method as-is
     """
     handlers[event] = handler
 
@@ -109,7 +125,6 @@ def set_user_password(password):
         LookupError: user not found
         webauth.AccessDenied: user is not logged in
     """
-    from hashlib import sha256
     user_id = get_user_id()
     if user_id:
         if not _d.db.query('user.password.set',
@@ -270,12 +285,78 @@ def logout():
     return redirect(_next_uri()) if result is None else result
 
 
+def touch(user_id):
+    _d.db.query('user.touch', id=user_id, d=datetime.datetime.now())
+
+
+def register(email, password, confirmed=True, next_uri_confirm=None):
+    """
+    Raises:
+        webauth.ResourceAlreadyExists: email already registered
+    """
+    try:
+        user_id = _d.db.query("user.create",
+                              email=email,
+                              password=sha256(password.encode()).hexdigest(),
+                              d_created=datetime.datetime.now(),
+                              confirmed=confirmed).fetchone().id
+    except sqlalchemy.exc.IntegrityError as e:
+        raise ResourceAlreadyExists(e)
+    session[f'{_d.x_prefix}user_id'] = user_id
+    session[f'{_d.x_prefix}user_confirmed'] = confirmed
+    if not confirmed:
+        tpl = email_tpl['confirm.email']
+        link = generate_confirm(method='confirm.email',
+                                user_id=user_id,
+                                email=email,
+                                expires=tpl['expires'],
+                                next_uri=next_uri_confirm)
+        _d.smtp.sendmail(email_sender,
+                         email,
+                         subject=tpl['subject'],
+                         text=tpl['text'].format(link=link),
+                         html=tpl['html'].format(link=link))
+    return redirect(_next_uri())
+
+
+def generate_confirm(method, expires=None, next_uri=None, **kwargs):
+    d = {'method': method, 'kw': kwargs}
+    if next_uri:
+        d['next'] = next_uri
+    key = _d.kv.put(value=d, expires=expires)
+    return url_for(f'{_d.dot_prefix}confirm', key=key, _external=True)
+
+
+def handle_confirm(key):
+    try:
+        value = _d.kv.get(key, delete=True)
+        confirmers[value['method']](**value.get('kw', {}))
+        response = _call_handler('confirm', key=key, value=value)
+        return response if response else redirect(value.get(
+            'next', _d.root_uri))
+    except LookupError:
+        response = _call_handler('exception.confirm_nokey', key=key)
+        return response if response else Response('No such confirmation link',
+                                                  status=404)
+
+
+def confirm_user(user_id, email):
+    if not _d.db.query('user.confirm.email',
+                       id=user_id,
+                       email=email,
+                       d=datetime.datetime.now()).rowcount:
+        raise LookupError
+    session[f'{_d.x_prefix}user_id'] = user_id
+    session[f'{_d.x_prefix}user_confirmed'] = True
+
+
 def init(app,
          db,
          config,
          base_prefix='/auth',
          root_uri='/',
          providers=['google', 'facebook', 'github'],
+         smtp=None,
          fix_ssl=True):
     """
     Args:
@@ -295,6 +376,7 @@ def init(app,
     _d.db.rq_func = rq
     _d.kv = KVStorage(db=db, table_name='webauth_kv')
     _d.root_uri = root_uri
+    _d.smtp = smtp
 
     if fix_ssl:
         from werkzeug.middleware.proxy_fix import ProxyFix
@@ -308,9 +390,10 @@ def init(app,
         user = Table(
             'webauth_user', meta,
             Column('id', BigInteger(), primary_key=True, autoincrement=True),
-            Column('email', VARCHAR(255), nullable=True),
+            Column('email', VARCHAR(255), nullable=True, unique=True),
             Column('password', VARCHAR(64), nullable=True),
             Column('d_created', DateTime(timezone=True), nullable=False),
+            Column('d_active', DateTime(timezone=True), nullable=True),
             Column('confirmed', Boolean, nullable=False, server_default='0'))
         user_auth = Table(
             f'webauth_user_auth', meta,
@@ -330,8 +413,8 @@ def init(app,
         meta.create_all(db.connect())
 
     # TODO
-    # register with email (+ confirmation)
     # login with email
+    # re-send confirmation email
     # reset password with email
     # set email / password to oauth accounts
     # cleanup kv and unconfirmed
@@ -339,9 +422,11 @@ def init(app,
     def handle_authorize(remote, token, user_info):
         if user_info:
             try:
-                session[f'{_d.x_prefix}user_id'] = _handle_user_auth(
+                user_id = _handle_user_auth(
                     user_info,
                     provider=remote if isinstance(remote, str) else remote.name)
+                touch(user_id)
+                session[f'{_d.x_prefix}user_id'] = user_id
                 session[f'{_d.x_prefix}user_picture'] = user_info.picture
                 session[f'{_d.x_prefix}user_confirmed'] = True
                 return redirect(_next_uri())
@@ -377,6 +462,10 @@ def init(app,
                      f'{_d.dot_prefix}.logout',
                      logout,
                      methods=['GET'])
+    app.add_url_rule(f'{base_prefix}/confirm/<key>',
+                     f'{_d.dot_prefix}confirm',
+                     handle_confirm,
+                     methods=['GET'])
     for p in providers:
         if p == 'google':
             oauth.register(
@@ -399,3 +488,6 @@ def init(app,
             app.register_blueprint(blueprint, url_prefix=f'{base_prefix}/{p}')
     init_db()
     return
+
+
+confirmers = {'confirm.email': confirm_user}

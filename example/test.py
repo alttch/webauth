@@ -7,6 +7,7 @@ import jinja2
 from flask import Flask, redirect, request
 from pyaltt2.config import load_yaml
 from pyaltt2.db import Database
+from pyaltt2.mail import SMTP
 
 tldr = jinja2.FileSystemLoader(searchpath='./templates/')
 tenv = jinja2.Environment(loader=tldr)
@@ -17,15 +18,15 @@ app = Flask(__name__)
 
 db = Database('postgresql://test:123@localhost/test')
 
-webauth.init(app, db=db, config=config)
+webauth.init(app, db=db, config=config, smtp=SMTP(host='10.90.1.8'))
 webauth.register_handler(
     'exception.provider_exists',
     lambda: serve_tpl('error',
                       message='This account is already in use by another user',
-                      next='/dashboard'))
+                      next_uri='/dashboard'))
 webauth.register_handler(
     'exception.provider_failed', lambda: serve_tpl(
-        'error', message='Provider registration failed', next='/dashboard'))
+        'error', message='Provider registration failed', next_uri='/dashboard'))
 
 
 def serve_tpl(tpl_file, **kwargs):
@@ -53,6 +54,22 @@ def dashboard():
         return redirect('/')
 
 
+@app.route('/register', methods=['POST'])
+def register():
+    email = request.form.get('email')
+    password = request.form.get('password')
+    webauth.set_next('/dashboard')
+    try:
+        return webauth.register(email,
+                                password,
+                                confirmed=False,
+                                next_uri_confirm='/dashboard')
+    except webauth.ResourceAlreadyExists:
+        return serve_tpl('error',
+                         message='This email is already registered',
+                         next_uri='/')
+
+
 @app.route('/delete-provider')
 def delete_provider():
     provider = request.args.get('provider')
@@ -63,9 +80,9 @@ def delete_provider():
     except webauth.ResourceBusy:
         return serve_tpl('error',
                          message='Last provider can not be deleted',
-                         next='/dashboard')
+                         next_uri='/dashboard')
     except webauth.AccessDenied:
-        return serve_tpl('error', message='Access denied', next='/')
+        return serve_tpl('error', message='Access denied', next_uri='/')
 
 
 @app.route('/delete-account')
@@ -73,7 +90,7 @@ def delete_account():
     try:
         return webauth.delete_user()
     except webauth.AccessDenied:
-        return serve_tpl('error', message='Access denied', next='/')
+        return serve_tpl('error', message='Access denied', next_uri='/')
 
 
 @app.route('/oauth-login/<provider>')

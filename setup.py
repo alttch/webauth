@@ -17,7 +17,7 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     include_package_data=True,
     license='MIT',
-    install_requires=['pyaltt2>=0.0.69'],
+    install_requires=['pyaltt2>=0.0.70'],
     classifiers=(
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',
