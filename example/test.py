@@ -59,7 +59,7 @@ def login():
 
 @app.route('/resend-confirm')
 def resend_confirm():
-    webauth.resend_email_confirm(next_uri_confirm='/dashboard')
+    webauth.resend_email_confirm(next_action_uri='/dashboard')
     return redirect('/dashboard')
 
 
@@ -73,6 +73,16 @@ def dashboard():
         return redirect('/')
 
 
+@app.route('/remind', methods=['POST'])
+def remind():
+    email = request.form.get('email')
+    try:
+        webauth.send_reset_password(email, next_action_uri='/dashboard')
+        return redirect('/')
+    except LookupError:
+        return serve_tpl('error', message='user does not exists', next_uri='/')
+
+
 @app.route('/register', methods=['POST'])
 def register():
     email = request.form.get('email')
@@ -82,7 +92,7 @@ def register():
         return webauth.register(email,
                                 password,
                                 confirmed=False,
-                                next_uri_confirm='/dashboard')
+                                next_action_uri='/dashboard')
     except webauth.ResourceAlreadyExists:
         return serve_tpl('error',
                          message='This email is already registered',

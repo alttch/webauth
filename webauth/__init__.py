@@ -1,4 +1,4 @@
-__author__ = 'Altertech, http://www.altertech.com/'
+__author__ = 'Altertech, https://www.altertech.com/'
 __copyright__ = 'Copyright (C) 2020 Altertech'
 __license__ = 'MIT'
 __version__ = '0.0.1'
@@ -21,12 +21,21 @@ from hashlib import sha256
 email_sender = 'webauth-test@lab.altt.ch'
 email_tpl = {
     'confirm.email': {
+        'subject': 'Please confirm your email address',
+        'text': 'Please click on the link {action_link} '
+                'to confirm your email address',
+        'html': '<html><body>Please click <a href="{action_link}">here</a>'
+                ' to confirm your email address</body></html>',
+        'expires': 86400
+    },
+    'reset.password': {
         'subject':
-            'Please confirm your email address',
+            'Password reset',
         'text':
-            'Please click on the link {confirm_link} to confirm your email address',
+            'Please click on the link {action_link} to reset your password',
         'html':
-            '<html><body>Please click <a href="{confirm_link}">here</a> to confirm your email address </body></html>',
+            '<html><body>Please click <a href="{action_link}">here</a>' +
+            ' to reset your password</body></html>',
         'expires':
             86400
     }
@@ -93,6 +102,8 @@ def register_handler(event, handler):
 
     Events:
         register: new user registration (user_id=user_id)
+        login: login (user_id=user_id)
+        remind: password reset request (user_id=user_id)
         delete: user account deletion (user_id=user_id)
         logout: logout event
 
@@ -114,10 +125,10 @@ def _call_handler(event, **kwargs):
     return h(**kwargs) if h else None
 
 
-def _log_user_event(event):
+def _log_user_event(event, user_id=None):
     if log_user_events:
         _d.db.query('user.log.event',
-                    id=get_user_id(),
+                    id=user_id if user_id else get_user_id(),
                     event=event,
                     ip=http_real_ip(),
                     d=datetime.datetime.now())
@@ -183,10 +194,11 @@ def delete_user_provider(provider, sub):
     """
     user_id = get_user_id()
     if user_id:
-        if _d.db.query('user.provider.count.except',
-                       id=user_id,
-                       provider=provider,
-                       sub=sub).fetchone().c < 1:
+        _log_user_event(f'delete:{provider}')
+        if not get_user_email() and _d.db.query('user.provider.count.except',
+                                               id=user_id,
+                                               provider=provider,
+                                               sub=sub).fetchone().c < 1:
             raise ResourceBusy
         else:
             if not _d.db.query(
@@ -209,6 +221,7 @@ def delete_user():
     """
     user_id = get_user_id()
     if user_id:
+        _log_user_event('delete')
         _call_handler('delete', user_id=user_id)
         if not _d.db.query('user.delete', id=user_id).rowcount:
             raise LookupError
@@ -308,21 +321,35 @@ def touch(user_id):
     _d.db.query('user.touch', id=user_id, d=datetime.datetime.now())
 
 
-def _send_confirmation_email(user_id, email, next_uri_confirm=None):
-    tpl = email_tpl['confirm.email']
-    link = generate_confirm(method='confirm.email',
-                            user_id=user_id,
-                            email=email,
-                            expires=tpl['expires'],
-                            next_uri=next_uri_confirm)
+def _send_reset_email(user_id, email, next_action_uri=None):
+    tpl = email_tpl['reset.password']
+    link = generate_external_action(method='reset.password',
+                                    user_id=user_id,
+                                    email=email,
+                                    expires=tpl['expires'],
+                                    next_uri=next_action_uri)
     _d.smtp.sendmail(email_sender,
                      email,
                      subject=tpl['subject'],
-                     text=tpl['text'].format(confirm_link=link),
-                     html=tpl['html'].format(confirm_link=link))
+                     text=tpl['text'].format(action_link=link),
+                     html=tpl['html'].format(action_link=link))
 
 
-def register(email, password, confirmed=True, next_uri_confirm=None):
+def _send_confirmation_email(user_id, email, next_action_uri=None):
+    tpl = email_tpl['confirm.email']
+    link = generate_external_action(method='confirm.email',
+                                    user_id=user_id,
+                                    email=email,
+                                    expires=tpl['expires'],
+                                    next_uri=next_action_uri)
+    _d.smtp.sendmail(email_sender,
+                     email,
+                     subject=tpl['subject'],
+                     text=tpl['text'].format(action_link=link),
+                     html=tpl['html'].format(action_link=link))
+
+
+def register(email, password, confirmed=True, next_action_uri=None):
     """
     Raises:
         webauth.ResourceAlreadyExists: email already registered
@@ -341,7 +368,7 @@ def register(email, password, confirmed=True, next_uri_confirm=None):
     if not confirmed:
         _send_confirmation_email(user_id=user_id,
                                  email=email,
-                                 next_uri_confirm=next_uri_confirm)
+                                 next_action_uri=next_action_uri)
 
     return redirect(_next_uri())
 
@@ -351,10 +378,26 @@ def get_user_email():
                        id=session[f'{_d.x_prefix}user_id']).fetchone().email
 
 
-def resend_email_confirm(next_uri_confirm=None):
+def resend_email_confirm(next_action_uri=None):
     _send_confirmation_email(user_id=session[f'{_d.x_prefix}user_id'],
                              email=get_user_email(),
-                             next_uri_confirm=next_uri_confirm)
+                             next_action_uri=next_action_uri)
+
+
+def send_reset_password(email, next_action_uri=None):
+    """
+    Raises:
+        LookupError: user not found
+    """
+    user = _d.db.query("user.select.id", email=email).fetchone()
+    if user:
+        _call_handler('remind', user_id=user.id)
+        _log_user_event(f'remind:{email}', user_id=user.id)
+        _send_reset_email(user_id=user.id,
+                          email=email,
+                          next_action_uri=next_action_uri)
+    else:
+        raise LookupError
 
 
 def login(email, password):
@@ -362,7 +405,7 @@ def login(email, password):
     Raises:
         webauth.AccessDenied: invalid credentials
     """
-    user = _d.db.query("user.select.id",
+    user = _d.db.query("user.select.id.bypassword",
                        email=email,
                        password=sha256(
                            password.encode()).hexdigest()).fetchone()
@@ -370,12 +413,13 @@ def login(email, password):
         touch(user.id)
         session[f'{_d.x_prefix}user_id'] = user.id
         session[f'{_d.x_prefix}user_confirmed'] = user.confirmed
+        _call_handler('login', user_id=user.id)
         _log_user_event('login')
     else:
         raise AccessDenied
 
 
-def generate_confirm(method, expires=None, next_uri=None, **kwargs):
+def generate_external_action(method, expires=None, next_uri=None, **kwargs):
     d = {'method': method, 'kw': kwargs}
     if next_uri:
         d['next'] = next_uri
@@ -386,7 +430,7 @@ def generate_confirm(method, expires=None, next_uri=None, **kwargs):
 def handle_confirm(key):
     try:
         value = _d.kv.get(key, delete=True)
-        confirmers[value['method']](**value.get('kw', {}))
+        external_actions[value['method']](**value.get('kw', {}))
         response = _call_handler('confirm', key=key, value=value)
         return response if response else redirect(value.get(
             'next', _d.root_uri))
@@ -396,7 +440,7 @@ def handle_confirm(key):
                                                   status=404)
 
 
-def confirm_user(user_id, email):
+def confirm_user(user_id, email, _log=True):
     if not _d.db.query('user.confirm.email',
                        id=user_id,
                        email=email,
@@ -404,7 +448,12 @@ def confirm_user(user_id, email):
         raise LookupError
     session[f'{_d.x_prefix}user_id'] = user_id
     session[f'{_d.x_prefix}user_confirmed'] = True
-    _log_user_event(f'confirm.email:{email}')
+    if _log: _log_user_event(f'confirm.email:{email}')
+
+
+def reset_password(user_id, email):
+    confirm_user(user_id, email, _log=False)
+    _log_user_event(f'reset:{email}')
 
 
 def init(app,
@@ -478,7 +527,6 @@ def init(app,
         meta.create_all(db.connect())
 
     # TODO
-    # reset password with email
     # set email / password to oauth accounts
     # change email
     # change password
@@ -493,6 +541,7 @@ def init(app,
                 session[f'{_d.x_prefix}user_id'] = user_id
                 session[f'{_d.x_prefix}user_picture'] = user_info.picture
                 session[f'{_d.x_prefix}user_confirmed'] = True
+                _call_handler('login', user_id=user_id)
                 _log_user_event(f'login:{provider}')
                 return redirect(_next_uri())
             except ResourceAlreadyExists:
@@ -555,4 +604,7 @@ def init(app,
     return
 
 
-confirmers = {'confirm.email': confirm_user}
+external_actions = {
+    'confirm.email': confirm_user,
+    'reset.password': reset_password
+}

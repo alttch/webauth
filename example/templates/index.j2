@@ -5,7 +5,7 @@
   {% if not authenticated %}
     <br />
     <br />
-    [ <a href="#" onclick="showLogin();">LOGIN</a> | <a href="#" onclick="showRegister()">Register</a> ]<br />
+    [ <a href="#" onclick="showForm('login');">LOGIN</a> | <a href="#" onclick="showForm('register')">Register</a> ]<br />
     <b>Please login</b>
     <div>
       <a href="/oauth-login/google"><img class="social" src="/static/icons/google.png"></a>
@@ -17,6 +17,7 @@
         E-mail <input id="email" type="text" name="email" /><br />
         Password <input type="password" name="password" /><br />
         <input type="submit" value="GO" />
+        <a href="#" onclick="showForm('remind')">Forgot password?</a>
       </form>
     </div>
     <div id="registerform" style="display: none">
@@ -28,25 +29,28 @@
         <input type="submit" value="Register" />
       </form>
     </div>
+    <div id="remindform" style="display: none">
+      <form action="/remind" name="remind" method="POST">
+        E-mail <input id="email_remind" type="text" name="email" /><br />
+        <input type="submit" value="Reset password" />
+      </form>
+    </div>
     <script>
       document.getElementById("email").focus();
 
-      function showLogin() {
-        document.getElementById("registerform").style.display='none'
-        document.getElementById("loginform").style.display='block'
-      }
+      forms = ['login', 'register', 'remind']
 
-      function showRegister() {
-        document.getElementById("loginform").style.display='none'
-        document.getElementById("registerform").style.display='block'
+      function showForm(form) {
+        forms.forEach(val => document.getElementById(`${val}form`).style.display='none');
+        document.getElementById(`${form}form`).style.display='block';
       }
 
       function validatereg() {
         let err = '';
         if (document.getElementById('password').value != document.getElementById('password2').value) {
-            err = 'passwords do not match'
+          err = 'passwords do not match'
         } else if (!document.getElementById('email_reg').value || !document.getElementById('password').value) {
-            err = 'please fill all fields'
+          err = 'please fill all fields'
         }
         if (!err) {
           document.forms["reg"].submit();
