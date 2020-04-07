@@ -6,3 +6,4 @@ Makefile
 example/config.yml
 .idea/
 *.pyc
+doc/_build

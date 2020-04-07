@@ -17,7 +17,9 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     include_package_data=True,
     license='MIT',
-    install_requires=['pyaltt2>=0.0.70'],
+    install_requires=[
+        'pyaltt2>=0.0.70', 'flask', 'loginpass', 'authlib', 'sqlalchemy'
+    ],
     classifiers=(
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',

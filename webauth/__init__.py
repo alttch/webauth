@@ -21,6 +21,9 @@ import datetime
 import sqlalchemy
 
 email_sender = 'webauth-test@lab.altt.ch'
+"""
+Default email sender (From: field)
+"""
 email_tpl = {
     'confirm.email': {
         'subject': 'Please confirm your email address',
@@ -50,40 +53,54 @@ email_tpl = {
             86400
     }
 }
+"""
+E-mail templates. Each template contains fields
+
+* subject: message subject
+* text: text message (should contain {action_link} variable)
+* html: HTML message (should contain {action_link} variable)
+* expires: confirm action link expiration in seconds or datetime.timedelta
+
+Templates
+
+* confirm.email: email confirmation
+* confirm.email: remove email - remove old emal confirmation on email change
+* reset.password: password reset
+"""
 
 handlers = {}
 
 _d = SimpleNamespace()
 
+allow_registration = True
 """
 Allow new user registration
 """
-allow_registration = True
 
+user_unconfirmed_expires = 86400
 """
 Default expiration time (seconds or datetime.timedelta) for the unconfirmed
 users
 """
-user_unconfirmed_expires = 86400
 
+real_ip_header = None
 """
 Real IP header, if front-end server is used (e.g. X-Real-IP)
 """
-real_ip_header = None
 
+log_user_events = True
 """
 Log user events, if False, events are logged only to DEBUG log
 """
-log_user_events = True
 
 rs = ResourceStorage(mod='webauth')
 
 rq = partial(rs.get, resource_subdir='sql', ext='sql')
 
+logger = logging.getLogger('webauth')
 """
 Override logger e.g. to "gunicorn.error" to use with gunicorn
 """
-logger = logging.getLogger('webauth')
 
 _provider_mod = {
     'battlenet': loginpass.BattleNet,
@@ -139,17 +156,17 @@ def register_handler(event, handler):
     Register event handler
 
     Events:
-        register: new user registration (user_id=user_id)
-        login: login (user_id=user_id)
-        remind: password reset request (user_id=user_id)
-        delete: user account deletion (user_id=user_id)
-        logout: logout event
 
-        exception.provider_exists: attempt to register with oauth provider
-            which's already assigned to another user
-        exception.provider_failed: oauth provider registration failure
-        exception.registration_denied: account registration attempt when
-            allow_registration is False
+    * register: new user registration (user_id=user_id)
+    * login: login (user_id=user_id)
+    * remind: password reset request (user_id=user_id)
+    * delete: user account deletion (user_id=user_id)
+    * logout: logout event
+    * exception.provider_exists: attempt to register with oauth provider
+      which's already assigned to another user
+    * exception.provider_failed: oauth provider registration failure
+    * exception.registration_denied: account registration attempt when
+      allow_registration is False
 
     For handlers: exception.provider_exists, exception.provider_failed,
     exception.registration_denied, logout, confirm, exception.confirm_nokey if

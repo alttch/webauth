@@ -1,0 +1,5 @@
+pyaltt2
+flask
+loginpass
+authlib
+sqlalchemy
