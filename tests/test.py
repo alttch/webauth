@@ -75,6 +75,11 @@ def clear_pop3(login=None):
 
 def click(elem):
     _d.driver.find_element_by_id(elem).click()
+    if elem.endswith('-github'):
+        try:
+            click('js-oauth-authorize-btn')
+        except NoSuchElementException:
+            pass
 
 
 def fill(elem, value):
