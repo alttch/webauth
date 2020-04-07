@@ -1,7 +1,6 @@
 #!/usr/bin/env pytest
 
 # TODO
-# test delete oauth (including last one)
 # test add email with oauth login
 # test oauth is in use
 
@@ -38,6 +37,74 @@ for t in [
         pass
 
 
+def login_pop3(login=None, wait_mail=None):
+    if login is None:
+        login = config['pop3']['login'][0]
+    c = 0
+    while True:
+        pop3 = POP3(host=config['pop3']['host'])
+        pop3.user(login)
+        pop3.pass_(config['pop3']['password'])
+        if not wait_mail or len(pop3.list()[1]):
+            break
+        c += 0.5
+        pop3.quit()
+        time.sleep(0.5)
+        if c > wait_mail:
+            raise TimeoutError
+    return pop3
+
+
+def get_pop3_mail(login=None):
+    pop3 = login_pop3(login=login, wait_mail=5)
+    msg = email.message_from_string('\n'.join(
+        [x.decode() for x in pop3.retr(1)[1]]))
+    pop3.dele(1)
+    pop3.quit()
+    return msg
+
+
+def get_pop3_link(login=None):
+    payload = str(get_pop3_mail(login=login).get_payload()[0])
+    logging.info(payload)
+    return re.search('(?P<url>https?://[^\s]+)', payload).group('url')
+
+
+def _clear_pop3(login=None):
+    pop3 = login_pop3(login=login)
+    for i in range(len(pop3.list()[1])):
+        pop3.dele(i + 1)
+    pop3.quit()
+
+
+def click(elem):
+    _d.driver.find_element_by_id(elem).click()
+
+
+def fill(elem, value):
+    _d.driver.find_element_by_id(elem).send_keys(value)
+
+
+def fill_register(email, password):
+    click('do_reg')
+    fill('email_reg', email)
+    fill('password', password)
+    fill('password2', password)
+    click('reg_submit')
+
+
+def login(email, password):
+    fill('email', email)
+    fill('pass', password)
+    click('login_submit')
+    assert _d.driver.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
+
+
+def logout():
+    click('logout')
+    assert _d.driver.current_url == 'https://webauth-test.lab.altt.ch/'
+
+
 @pytest.fixture(scope='session', autouse=True)
 def init():
     try:
@@ -63,12 +130,12 @@ def init():
     if not os.getenv('SKIP_OAUTH'):
         _clear_pop3()
         d.get('https://github.com/login')
-        d.find_element_by_id('login_field').send_keys(config['github']['login'])
-        d.find_element_by_id('password').send_keys(config['github']['password'])
+        fill('login_field', config['github']['login'])
+        fill('password', config['github']['password'])
         d.find_element_by_class_name('btn-primary').click()
         try:
             otp = d.find_element_by_id('otp')
-            msg = _get_pop3_mail()
+            msg = get_pop3_mail()
             code = msg.get_payload().split('Verification code: ')[1].split(
                 '\n')[0]
             otp.send_keys(code)
@@ -86,52 +153,17 @@ def init():
         pass
 
 
-def _login_pop3(login=None, wait_mail=None):
-    if login is None:
-        login = config['pop3']['login'][0]
-    c = 0
-    while True:
-        pop3 = POP3(host=config['pop3']['host'])
-        pop3.user(login)
-        pop3.pass_(config['pop3']['password'])
-        if not wait_mail or len(pop3.list()[1]):
-            break
-        c += 0.5
-        pop3.quit()
-        time.sleep(0.5)
-        if c > wait_mail:
-            raise TimeoutError
-    return pop3
-
-
-def _get_pop3_mail(login=None):
-    pop3 = _login_pop3(login=login, wait_mail=5)
-    msg = email.message_from_string('\n'.join(
-        [x.decode() for x in pop3.retr(1)[1]]))
-    pop3.dele(1)
-    pop3.quit()
-    return msg
-
-
-def _get_pop3_link(login=None):
-    payload = str(_get_pop3_mail(login=login).get_payload()[0])
-    logging.info(payload)
-    return re.search('(?P<url>https?://[^\s]+)', payload).group('url')
-
-
-def _clear_pop3(login=None):
-    pop3 = _login_pop3(login=login)
-    for i in range(len(pop3.list()[1])):
-        pop3.dele(i + 1)
-    pop3.quit()
-
-
 def _test001_oauth_login():
     if os.getenv('SKIP_OAUTH'): return
     d = _d.driver
     d.get('https://webauth-test.lab.altt.ch/')
-    d.find_element_by_id('login-github').click()
-    d.find_element_by_id('delete-account').click()
+    click('login-github')
+    click('delete-provider-github')
+    assert 'ERROR' in d.title
+    click('next')
+    # add email
+    # cleanup
+    click('delete-account')
     assert d.current_url == 'https://webauth-test.lab.altt.ch/'
 
 
@@ -139,37 +171,13 @@ def test002_register_login_logout():
     _clear_pop3()
     d = _d.driver
     d.get('https://webauth-test.lab.altt.ch/')
-
-    def click(elem):
-        d.find_element_by_id(elem).click()
-
-    def fill(elem, value):
-        d.find_element_by_id(elem).send_keys(value)
-
-    def fill_register(email, password):
-        click('do_reg')
-        fill('email_reg', email)
-        fill('password', password)
-        fill('password2', password)
-        click('reg_submit')
-
-    def login(email, password):
-        fill('email', email)
-        fill('pass', password)
-        click('login_submit')
-        assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
-
-    def logout():
-        click('logout')
-        assert d.current_url == 'https://webauth-test.lab.altt.ch/'
-
     # register
     fill_register(config['email'][0], '123')
     assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
     assert d.find_element_by_id('resend-confirm') is not None
     _clear_pop3()
     click('resend-confirm')
-    d.get(_get_pop3_link())
+    d.get(get_pop3_link())
     assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
     with pytest.raises(NoSuchElementException):
         d.find_element_by_id('resend-confirm')
@@ -190,7 +198,7 @@ def test002_register_login_logout():
     click('do_forgot')
     fill('email_remind', config['email'][0])
     click('remind_submit')
-    d.get(_get_pop3_link())
+    d.get(get_pop3_link())
     assert d.current_url == 'https://webauth-test.lab.altt.ch/set-password'
     fill('password', '111')
     fill('password2', '111')
@@ -232,8 +240,8 @@ def test002_register_login_logout():
     click('set-email')
     fill('email', config['email'][1])
     click('submit_change')
-    d.get(_get_pop3_link())
-    d.get(_get_pop3_link(login=config['pop3']['login'][1]))
+    d.get(get_pop3_link())
+    d.get(get_pop3_link(login=config['pop3']['login'][1]))
     # login with new email
     logout()
     login(config['email'][1], '123')
@@ -243,5 +251,9 @@ def test002_register_login_logout():
         logout()
         click('login-github')
         assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
+        click('delete-provider-github')
+        assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
+        with pytest.raises(NoSuchElementException):
+            d.find_element_by_id('delete-provider-github')
     # cleanup
     click('delete-account')
