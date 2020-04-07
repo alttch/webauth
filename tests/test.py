@@ -77,9 +77,22 @@ def click(elem):
     _d.driver.find_element_by_id(elem).click()
     if elem.endswith('-github'):
         try:
-            click('js-oauth-authorize-btn')
-            time.sleep(0.5)
-            click('js-oauth-authorize-btn')
+            while True:
+                c = 0
+                try:
+                    click('js-oauth-authorize-btn')
+                except NoSuchElementException:
+                    break
+                time.sleep(0.3)
+                c += 0.3
+                if c > 5:
+                    raise TimeoutError
+            c = 0
+            while not _d.driver.current_url.startswith('https://webauth-test.'):
+                c += 0.1
+                time.sleep(0.1)
+                if c > 5:
+                    raise TimeoutError
         except NoSuchElementException:
             pass
 
