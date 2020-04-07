@@ -1,7 +1,6 @@
 #!/usr/bin/env pytest
 
 # TODO
-# test add email with oauth login
 # test oauth is in use
 
 import pytest
@@ -70,7 +69,7 @@ def get_pop3_link(login=None):
     return re.search('(?P<url>https?://[^\s]+)', payload).group('url')
 
 
-def _clear_pop3(login=None):
+def clear_pop3(login=None):
     pop3 = login_pop3(login=login)
     for i in range(len(pop3.list()[1])):
         pop3.dele(i + 1)
@@ -128,7 +127,7 @@ def init():
     d = _d.driver
     # github login
     if not os.getenv('SKIP_OAUTH'):
-        _clear_pop3()
+        clear_pop3()
         d.get('https://github.com/login')
         fill('login_field', config['github']['login'])
         fill('password', config['github']['password'])
@@ -153,7 +152,7 @@ def init():
         pass
 
 
-def _test001_oauth_login():
+def test001_oauth_login():
     if os.getenv('SKIP_OAUTH'): return
     d = _d.driver
     d.get('https://webauth-test.lab.altt.ch/')
@@ -162,20 +161,36 @@ def _test001_oauth_login():
     assert 'ERROR' in d.title
     click('next')
     # add email
+    clear_pop3()
+    click('set-email')
+    fill('email', config['email'][0])
+    click('submit_change')
+    d.get(get_pop3_link())
+    assert d.current_url == 'https://webauth-test.lab.altt.ch/set-password'
+    fill('password', '111')
+    fill('password2', '111')
+    click('submit_change')
+    assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
+    # check both login by email and oauth
+    logout()
+    click('login-github')
+    assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
+    logout()
+    login(config['email'][0], '111')
     # cleanup
     click('delete-account')
     assert d.current_url == 'https://webauth-test.lab.altt.ch/'
 
 
 def test002_register_login_logout():
-    _clear_pop3()
     d = _d.driver
     d.get('https://webauth-test.lab.altt.ch/')
     # register
+    clear_pop3()
     fill_register(config['email'][0], '123')
     assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
     assert d.find_element_by_id('resend-confirm') is not None
-    _clear_pop3()
+    clear_pop3()
     click('resend-confirm')
     d.get(get_pop3_link())
     assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
@@ -189,7 +204,7 @@ def test002_register_login_logout():
     login(config['email'][0], '123')
     logout()
     # lost password
-    _clear_pop3()
+    clear_pop3()
     fill('email', config['email'][0])
     fill('pass', '111')
     click('login_submit')
@@ -235,8 +250,8 @@ def test002_register_login_logout():
     logout()
     login(config['email'][0], '123')
     # change email
-    _clear_pop3()
-    _clear_pop3(login=config['pop3']['login'][1])
+    clear_pop3()
+    clear_pop3(login=config['pop3']['login'][1])
     click('set-email')
     fill('email', config['email'][1])
     click('submit_change')
