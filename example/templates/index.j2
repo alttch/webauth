@@ -15,8 +15,8 @@
     <div id="loginform">
       <form action="/login" method="POST">
         E-mail <input id="email" type="text" name="email" /><br />
-        Password <input type="password" name="password" /><br />
-        <input type="submit" value="GO" />
+        Password <input id="pass" type="password" name="password" /><br />
+        <input id="login_submit" type="submit" value="GO" />
         <a href="#" id="do_forgot" onclick="showForm('remind')">Forgot password?</a>
       </form>
     </div>
@@ -32,7 +32,7 @@
     <div id="remindform" style="display: none">
       <form action="/remind" name="remind" method="POST">
         E-mail <input id="email_remind" type="text" name="email" /><br />
-        <input type="submit" value="Reset password" />
+        <input id="remind_submit" type="submit" value="Reset password" />
       </form>
     </div>
     <script>

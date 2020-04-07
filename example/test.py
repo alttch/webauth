@@ -1,9 +1,6 @@
 #!/usr/bin/env pytest
 
 # TODO
-# test login
-# test logout
-# test duplicate email
 # test add oauth
 # test delete oauth (including last one)
 # test add email with oauth login
@@ -65,19 +62,21 @@ def init():
         if c > 50: raise TimeoutError
     d = _d.driver
     # github login
-    _clear_pop3()
-    d.get('https://github.com/login')
-    d.find_element_by_id('login_field').send_keys(config['github']['login'])
-    d.find_element_by_id('password').send_keys(config['github']['password'])
-    d.find_element_by_class_name('btn-primary').click()
-    try:
-        otp = d.find_element_by_id('otp')
-        msg = _get_pop3_mail()
-        code = msg.get_payload().split('Verification code: ')[1].split('\n')[0]
-        otp.send_keys(code)
+    if not os.getenv('SKIP_OAUTH'):
+        _clear_pop3()
+        d.get('https://github.com/login')
+        d.find_element_by_id('login_field').send_keys(config['github']['login'])
+        d.find_element_by_id('password').send_keys(config['github']['password'])
         d.find_element_by_class_name('btn-primary').click()
-    except NoSuchElementException:
-        pass
+        try:
+            otp = d.find_element_by_id('otp')
+            msg = _get_pop3_mail()
+            code = msg.get_payload().split('Verification code: ')[1].split(
+                '\n')[0]
+            otp.send_keys(code)
+            d.find_element_by_class_name('btn-primary').click()
+        except NoSuchElementException:
+            pass
     yield
     _d.driver.quit()
     with open(pidfile) as fh:
@@ -128,7 +127,8 @@ def _clear_pop3(login=None):
     pop3.quit()
 
 
-def test001_oauth_login():
+def _test001_oauth_login():
+    if os.getenv('SKIP_OAUTH'): return
     d = _d.driver
     d.get('https://webauth-test.lab.altt.ch/')
     d.find_element_by_id('login-github').click()
@@ -136,21 +136,92 @@ def test001_oauth_login():
     assert d.current_url == 'https://webauth-test.lab.altt.ch/'
 
 
-def test002_register():
+def test002_register_login_logout():
     _clear_pop3()
     d = _d.driver
     d.get('https://webauth-test.lab.altt.ch/')
-    d.find_element_by_id('do_reg').click()
-    d.find_element_by_id('email_reg').send_keys(config['email'][0])
-    d.find_element_by_id('password').send_keys('123')
-    d.find_element_by_id('password2').send_keys('123')
-    d.find_element_by_id('reg_submit').click()
+    # register
+    def fill_register(email, password):
+        d.find_element_by_id('do_reg').click()
+        d.find_element_by_id('email_reg').send_keys(email)
+        d.find_element_by_id('password').send_keys(password)
+        d.find_element_by_id('password2').send_keys(password)
+        d.find_element_by_id('reg_submit').click()
+
+    def login(email, password):
+        d.find_element_by_id('email').send_keys(email)
+        d.find_element_by_id('pass').send_keys(password)
+        d.find_element_by_id('login_submit').click()
+        assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
+
+    def logout():
+        d.find_element_by_id('logout').click()
+        assert d.current_url == 'https://webauth-test.lab.altt.ch/'
+
+    def click(elem):
+        d.find_element_by_id(elem).click()
+
+    fill_register(config['email'][0], '123')
     assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
     assert d.find_element_by_id('resend-confirm') is not None
     _clear_pop3()
-    d.find_element_by_id('resend-confirm').click()
+    click('resend-confirm')
     d.get(_get_pop3_link())
     assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
     with pytest.raises(NoSuchElementException):
         d.find_element_by_id('resend-confirm')
+    # logout
+    logout()
+    d.get('https://webauth-test.lab.altt.ch/dashboard')
+    assert d.current_url == 'https://webauth-test.lab.altt.ch/'
+    # login
+    login(config['email'][0], '123')
+    logout()
+    # lost password
+    _clear_pop3()
+    d.find_element_by_id('email').send_keys(config['email'][0])
+    d.find_element_by_id('pass').send_keys('111')
+    click('login_submit')
+    assert 'ERROR' in d.title
+    click('next')
+    click('do_forgot')
+    d.find_element_by_id('email_remind').send_keys(config['email'][0])
+    click('remind_submit')
+    d.get(_get_pop3_link())
+    assert d.current_url == 'https://webauth-test.lab.altt.ch/set-password'
+    d.find_element_by_id('password').send_keys('111')
+    d.find_element_by_id('password2').send_keys('111')
+    click('submit_change')
+    assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
+    logout()
+    # login again
+    login(config['email'][0], '111')
+    logout()
+    # duplicate email
+    fill_register(config['email'][0], 'qwerty')
+    assert d.current_url == 'https://webauth-test.lab.altt.ch/register'
+    assert 'ERROR' in d.title
+    click('next')
+    # login again
+    login(config['email'][0], '111')
+    # set password
+    d.find_element_by_id('set-password').click()
+    assert d.current_url == 'https://webauth-test.lab.altt.ch/set-password'
+    # fill wrong old password
+    d.find_element_by_id('oldpass').send_keys('xyz')
+    d.find_element_by_id('password').send_keys('123')
+    d.find_element_by_id('password2').send_keys('123')
+    click('submit_change')
+    assert 'ERROR' in d.title
+    d.find_element_by_id('next').click()
+    # correctly change password
+    d.find_element_by_id('oldpass').send_keys('111')
+    d.find_element_by_id('password').send_keys('123')
+    d.find_element_by_id('password2').send_keys('123')
+    click('submit_change')
+    # login again
+    assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
+    logout()
+    login(config['email'][0], '123')
+    # cleanup
     d.find_element_by_id('delete-account').click()
