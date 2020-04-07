@@ -1,8 +1,5 @@
 #!/usr/bin/env pytest
 
-# TODO
-# test oauth is in use
-
 import pytest
 import time
 import os
@@ -66,7 +63,7 @@ def get_pop3_mail(login=None):
 def get_pop3_link(login=None):
     payload = str(get_pop3_mail(login=login).get_payload()[0])
     logging.info(payload)
-    return re.search('(?P<url>https?://[^\s]+)', payload).group('url')
+    return re.search('(?P<url>https?://[^ ]+)', payload).group('url')
 
 
 def clear_pop3(login=None):
@@ -178,6 +175,8 @@ def test001_oauth_login():
     logout()
     login(config['email'][0], '111')
     # cleanup
+    click('delete-provider-github')
+    assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
     click('delete-account')
     assert d.current_url == 'https://webauth-test.lab.altt.ch/'
 
@@ -271,4 +270,22 @@ def test002_register_login_logout():
         with pytest.raises(NoSuchElementException):
             d.find_element_by_id('delete-provider-github')
     # cleanup
+    click('delete-account')
+
+
+def test003_oauth_mixed():
+    if os.getenv('SKIP_OAUTH'): return
+    d = _d.driver
+    d.get('https://webauth-test.lab.altt.ch/')
+    # register with github
+    click('login-github')
+    assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
+    logout()
+    # register
+    clear_pop3()
+    fill_register(config['email'][0], '123')
+    assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
+    click('connect-github')
+    assert 'ERROR' in d.title
+    click('next')
     click('delete-account')
