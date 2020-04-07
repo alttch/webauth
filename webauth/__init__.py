@@ -284,7 +284,7 @@ def change_user_email(email, next_action_uri_oldaddr=None,
         if _d.db.query('user.select.id', email=email).rowcount:
             raise ResourceAlreadyExists
         old_email = get_user_email()
-        _log_user_event('email.change:{old_email}:{email}')
+        _log_user_event(f'email.change:{old_email}:{email}')
         if old_email:
             _send_email_change_old_addr(user_id, old_email, email,
                                         next_action_uri_oldaddr,
@@ -694,14 +694,13 @@ def generate_confirm_action(method, expires=None, next_uri=None, **kwargs):
 def handle_confirm(key):
     try:
         value = _d.kv.get(key, delete=True)
-        confirm_actions[value['method']](**value.get('kw', {}))
-        response = _call_handler('action.confirm', key=key, value=value)
-        return response if response else redirect(value.get(
-            'next', _d.root_uri))
     except LookupError:
         response = _call_handler('exception.confirm_nokey', key=key)
         return response if response else Response('No such confirmation link',
                                                   status=404)
+    confirm_actions[value['method']](**value.get('kw', {}))
+    response = _call_handler('action.confirm', key=key, value=value)
+    return response if response else redirect(value.get('next', _d.root_uri))
 
 
 def _confirm_user(user_id, email, _log=True):
@@ -722,7 +721,7 @@ def _remind_account(user_id, email):
 
 
 def _change_email(user_id, email, new_email, next_action_uri):
-    _log_user_event('change.email', user_id=user_id)
+    _log_user_event('email.change:confirmed', user_id=user_id)
     confirm_email_ownership(user_id=user_id,
                             email=new_email,
                             next_action_uri=next_action_uri)
@@ -889,8 +888,8 @@ def cleanup():
 
 confirm_actions = {
     'email.confirm': _confirm_user,
-    'account.remind': _remind_account,
-    'change.email': _change_email
+    'email.change': _change_email,
+    'account.remind': _remind_account
 }
 """
 Confirm action methods. By default, contains confirm action handlers for
