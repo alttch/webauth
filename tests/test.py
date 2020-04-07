@@ -292,6 +292,7 @@ def test003_oauth_mixed():
     clear_pop3()
     fill_register(config['email'][0], '123')
     assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
+    d.get(get_pop3_link())
     click('connect-github')
     assert 'ERROR' in d.title
     click('next')
