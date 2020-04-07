@@ -55,7 +55,8 @@ def init():
     c = 0
     time.sleep(1)
     options = Options()
-    # options.headless = True
+    if os.getenv('HEADLESS_TEST'):
+        options.headless = True
     _d.driver = webdriver.Firefox(options=options)
     while not os.path.isfile(pidfile):
         c += 1
@@ -63,10 +64,10 @@ def init():
         if c > 50: raise TimeoutError
     d = _d.driver
     # github login
-    # d.get('https://github.com/login')
-    # d.find_element_by_id('login_field').send_keys(config['github']['login'])
-    # d.find_element_by_id('password').send_keys(config['github']['password'])
-    # d.find_element_by_class_name('btn-primary').click()
+    d.get('https://github.com/login')
+    d.find_element_by_id('login_field').send_keys(config['github']['login'])
+    d.find_element_by_id('password').send_keys(config['github']['password'])
+    d.find_element_by_class_name('btn-primary').click()
     yield
     _d.driver.quit()
     with open(pidfile) as fh:
@@ -115,7 +116,7 @@ def _clear_pop3(login=None):
     pop3.quit()
 
 
-def _test001_oauth_login():
+def test001_oauth_login():
     d = _d.driver
     d.get('https://webauth-test.lab.altt.ch/')
     d.find_element_by_id('login-github').click()
