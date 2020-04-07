@@ -8,6 +8,9 @@ from flask import Flask, redirect, request
 from pyaltt2.config import load_yaml
 from pyaltt2.db import Database
 from pyaltt2.mail import SMTP
+import logging
+
+webauth.logger = logging.getLogger('gunicorn.error')
 
 tldr = jinja2.FileSystemLoader(searchpath='./templates/')
 tenv = jinja2.Environment(loader=tldr)

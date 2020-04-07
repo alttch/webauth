@@ -13,12 +13,13 @@ from pyaltt2.config import config_value
 from pyaltt2.crypto import gen_random_str
 from pyaltt2.res import ResourceStorage
 from pyaltt2.db import KVStorage
-import loginpass
-import datetime
-import sqlalchemy
 from types import SimpleNamespace
 from functools import partial
 from hashlib import sha256
+import loginpass
+import logging
+import datetime
+import sqlalchemy
 
 email_sender = 'webauth-test@lab.altt.ch'
 email_tpl = {
@@ -66,6 +67,8 @@ log_user_events = True
 rs = ResourceStorage(mod='webauth')
 
 rq = partial(rs.get, resource_subdir='sql', ext='sql')
+
+logger = logging.getLogger('webauth')
 
 _provider_mod = {
     'battlenet': loginpass.BattleNet,
@@ -128,21 +131,31 @@ def register_handler(event, handler):
     exception.registration_denied, logout, confirm, exception.confirm_nokey if
     not None value is returned, it's returned by web method as-is
     """
+    logger.debug(f'registered event handler for {event}: {handler}')
     handlers[event] = handler
 
 
 def _call_handler(event, **kwargs):
     h = handlers.get(event)
-    return h(**kwargs) if h else None
+    if h:
+        logger.debug(f'calling event handler for {event} with {kwargs}')
+        return h(**kwargs)
 
 
 def _log_user_event(event, user_id=None):
+    if not user_id:
+        user_id = get_user_id()
+    ip = http_real_ip()
+    logstr = f'{ip}  USER: {user_id}  EVENT: {event}'
     if log_user_events:
+        logger.info(logstr)
         _d.db.query('user.log.event',
-                    id=user_id if user_id else get_user_id(),
+                    id=user_id,
                     event=event,
-                    ip=http_real_ip(),
+                    ip=ip,
                     d=datetime.datetime.now())
+    else:
+        logger.debug(logstr)
 
 
 def _format_prefix(base_prefix):
@@ -172,6 +185,7 @@ def check_user_password(password, allow_empty=False):
                        id=user_id,
                        password=sha256(password.encode()).hexdigest()).rowcount:
             return True
+        logger.warning(f'user password check failed for {user_id}')
     raise AccessDenied
 
 
@@ -211,6 +225,7 @@ def change_user_email(email, next_action_uri_oldaddr=None,
         if _d.db.query('user.select.id', email=email).rowcount:
             raise ResourceAlreadyExists
         old_email = get_user_email()
+        _log_user_event('change.email:{old_email}:{email}')
         if old_email:
             _send_email_change_old_addr(user_id, old_email, email,
                                         next_action_uri_oldaddr,
@@ -341,6 +356,7 @@ def _handle_user_auth(user_info, provider):
                     provider=provider,
                     sub=user_info.sub,
                     name=user_info.name)
+        _log_user_event('register')
         _call_handler('register', user_id=user_id, user_info=user_info)
     else:
         if user_id and result.id != user_id:
@@ -377,12 +393,15 @@ def _next_uri():
 
 
 def logout():
-    result = _call_handler('logout')
-    for i in ('id', 'picture'):
-        try:
-            del session[f'{_d.x_prefix}user_{i}']
-        except KeyError:
-            pass
+    result = None
+    if get_user_id():
+        result = _call_handler('logout')
+        _log_user_event('logout')
+        for i in ('id', 'picture'):
+            try:
+                del session[f'{_d.x_prefix}user_{i}']
+            except KeyError:
+                pass
     return redirect(_next_uri()) if result is None else result
 
 
