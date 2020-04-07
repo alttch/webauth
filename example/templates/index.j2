@@ -5,19 +5,19 @@
   {% if not authenticated %}
     <br />
     <br />
-    [ <a href="#" onclick="showForm('login');">LOGIN</a> | <a href="#" onclick="showForm('register')">Register</a> ]<br />
+    [ <a href="#" onclick="showForm('login');">LOGIN</a> | <a id="do_reg" href="#" onclick="showForm('register')">Register</a> ]<br />
     <b>Please login</b>
     <div>
-      <a href="/oauth-login/google"><img class="social" src="/static/icons/google.png"></a>
-      <a href="/oauth-login/facebook"><img class="social" src="/static/icons/facebook.png"></a>
-      <a href="/oauth-login/github"><img class="social" src="/static/icons/github.png"></a>
+      <a href="/oauth-login/google" id="login-google"><img class="social" src="/static/icons/google.png"></a>
+      <a href="/oauth-login/facebook" id="login-facebook"><img class="social" src="/static/icons/facebook.png"></a>
+      <a href="/oauth-login/github" id="login-github"><img class="social" src="/static/icons/github.png"></a>
     </div>
     <div id="loginform">
       <form action="/login" method="POST">
         E-mail <input id="email" type="text" name="email" /><br />
         Password <input type="password" name="password" /><br />
         <input type="submit" value="GO" />
-        <a href="#" onclick="showForm('remind')">Forgot password?</a>
+        <a href="#" id="do_forgot" onclick="showForm('remind')">Forgot password?</a>
       </form>
     </div>
     <div id="registerform" style="display: none">
@@ -26,7 +26,7 @@
         E-mail <input id="email_reg" type="text" name="email" /><br />
         Password <input type="password" id="password" name="password" /><br />
         Confirm password <input type="password" id="password2" name="password2" /><br />
-        <input type="submit" value="Register" />
+        <input type="submit" id="reg_submit" value="Register" />
       </form>
     </div>
     <div id="remindform" style="display: none">

@@ -5,6 +5,7 @@ dist
 Makefile
 example/config.yml
 example/test.yml
+example/test-data.yml
 example/geckodriver.log
 .idea/
 *.pyc

@@ -8,7 +8,7 @@
   {% if confirmed %}
     (CONFIRMED)
   {% else %}
-    (UNCONFIRMED <a href="/resend-confirm">re-send confirmation email</a>)
+    (UNCONFIRMED <a id="resend-confirm" href="/resend-confirm">re-send confirmation email</a>)
   {% endif %}
   <br /><br />
   Connected authentication providers:
@@ -34,5 +34,5 @@
     <a href="/oauth-login/github"><img class="social" src="/static/icons/github.png"></a>
   </div>
   <br />
-  <input type="button" value="DELETE MY ACCOUNT" onclick="document.location='/delete-account'" />
+  <input type="button" id="delete-account" value="DELETE MY ACCOUNT" onclick="document.location='/delete-account'" />
 {% endblock %}
