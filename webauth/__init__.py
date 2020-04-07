@@ -55,18 +55,34 @@ handlers = {}
 
 _d = SimpleNamespace()
 
+"""
+Allow new user registration
+"""
 allow_registration = True
 
+"""
+Default expiration time (seconds or datetime.timedelta) for the unconfirmed
+users
+"""
 user_unconfirmed_expires = 86400
 
+"""
+Real IP header, if front-end server is used (e.g. X-Real-IP)
+"""
 real_ip_header = None
 
+"""
+Log user events, if False, events are logged only to DEBUG log
+"""
 log_user_events = True
 
 rs = ResourceStorage(mod='webauth')
 
 rq = partial(rs.get, resource_subdir='sql', ext='sql')
 
+"""
+Override logger e.g. to "gunicorn.error" to use with gunicorn
+"""
 logger = logging.getLogger('webauth')
 
 _provider_mod = {
@@ -92,14 +108,23 @@ _provider_mod = {
 
 
 class AccessDenied(Exception):
+    """
+    Exception class: access is denied
+    """
     pass
 
 
 class ResourceAlreadyExists(Exception):
+    """
+    Exception class: resource already exists
+    """
     pass
 
 
 class ResourceBusy(Exception):
+    """
+    Exception class: resource is busy (ca not be removed or replaced)
+    """
     pass
 
 
@@ -170,6 +195,11 @@ def _format_prefix(base_prefix):
 
 def check_user_password(password, allow_empty=False):
     """
+    Check password for the current user
+
+    Args:
+        password: user password
+        allow_empty: any password is considered as valid if no password is set
     Returns:
         True if password match
     Raises:
@@ -259,6 +289,10 @@ def delete_user_provider(provider, sub):
     """
     Delete user provider
 
+    Args:
+        provider: provider name
+        sub: OAuth2 sub
+
     Raises:
         webauth.AccessDenied: if user is not logged in
         webauth.ResourceBusy: if only one sign-in method is left
@@ -324,14 +358,28 @@ def is_authenticated():
 
 
 def is_confirmed():
+    """
+    Is user confirmed (logged in via OAuth2 or E-Mail is confirmed)
+    """
     return session.get(f'{_d.x_prefix}user_confirmed', False)
 
 
 def is_confirmed_session():
+    """
+    Is session confirmed (user just verified it via email)
+
+    App can use confirmed session e.g. to allow changing password without an
+    old one
+    """
     return session.get(f'{_d.x_prefix}user_confirmed_session', False)
 
 
 def clear_confirmed_session():
+    """
+    Clear confirmed session
+
+    The confirmed session should be cleared as soon as no longer required
+    """
     try:
         del session[f'{_d.x_prefix}user_confirmed_session']
     except:
@@ -370,6 +418,8 @@ def set_next(uri):
     Set next URI
 
     the URI will be used once, after login/logout
+
+    Usually used after OAuth login
     """
     session[f'{_d.x_prefix}next'] = uri
 
@@ -379,6 +429,11 @@ def get_next(default=None):
 
 
 def clear_next():
+    """
+    Clear next URI
+
+    Usually is not called by app
+    """
     try:
         del session[f'{_d.x_prefix}next']
     except:
@@ -392,11 +447,14 @@ def _next_uri():
 
 
 def logout():
+    """
+    Logout current user session
+    """
     result = None
     if get_user_id():
         result = _call_handler('logout')
         _log_user_event('logout')
-        for i in ('id', 'picture'):
+        for i in ('id', 'picture', 'confirmed', 'confirmed_session'):
             try:
                 del session[f'{_d.x_prefix}user_{i}']
             except KeyError:
@@ -458,30 +516,43 @@ def _send_confirmation_email(user_id, email, next_action_uri=None):
 
 def register(email, password, confirmed=True, next_action_uri=None):
     """
+    Register new user in traditional way
+
+    Args:
+        email: user email
+        password: user password
+        confirmed: if no, email confirmation is required (sent automatically)
+        next_action_uri: redirect URi after email confirmation
     Raises:
         webauth.ResourceAlreadyExists: email already registered
     """
-    try:
-        user_id = _d.db.query("user.create",
-                              email=email,
-                              password=sha256(password.encode()).hexdigest(),
-                              d_created=datetime.datetime.now(),
-                              confirmed=confirmed).fetchone().id
-    except sqlalchemy.exc.IntegrityError as e:
-        raise ResourceAlreadyExists(e)
-    session[f'{_d.x_prefix}user_id'] = user_id
-    session[f'{_d.x_prefix}user_confirmed'] = confirmed
-    _log_user_event('register')
-    if not confirmed:
-        _send_confirmation_email(user_id=user_id,
-                                 email=email,
-                                 next_action_uri=next_action_uri)
+    if allow_registration:
+        try:
+            user_id = _d.db.query("user.create",
+                                  email=email,
+                                  password=sha256(
+                                      password.encode()).hexdigest(),
+                                  d_created=datetime.datetime.now(),
+                                  confirmed=confirmed).fetchone().id
+        except sqlalchemy.exc.IntegrityError as e:
+            raise ResourceAlreadyExists(e)
+        session[f'{_d.x_prefix}user_id'] = user_id
+        session[f'{_d.x_prefix}user_confirmed'] = confirmed
+        _log_user_event('register')
+        if not confirmed:
+            _send_confirmation_email(user_id=user_id,
+                                     email=email,
+                                     next_action_uri=next_action_uri)
 
-    return redirect(_next_uri())
+        return redirect(_next_uri())
+    else:
+        raise AccessDenied
 
 
 def get_user_email():
     """
+    Get email address of current user
+
     Raises:
         webauth.AccessDenied: if user no longer exists in database
     """
@@ -494,6 +565,12 @@ def get_user_email():
 
 
 def resend_email_confirm(next_action_uri=None):
+    """
+    Re-send confirmation for the user email address
+
+    Args:
+        next_action_uri: redirect URI after email confirmation
+    """
     _send_confirmation_email(user_id=session[f'{_d.x_prefix}user_id'],
                              email=get_user_email(),
                              next_action_uri=next_action_uri)
@@ -501,6 +578,13 @@ def resend_email_confirm(next_action_uri=None):
 
 def send_reset_password(email, next_action_uri=None):
     """
+    Send password reset link to user
+
+    Password reset link is just a link which allows user to log in
+    automatically
+
+    Args:
+        next_action_uri: usually redirects to password change form
     Raises:
         LookupError: user not found
     """
@@ -517,6 +601,11 @@ def send_reset_password(email, next_action_uri=None):
 
 def login(email, password):
     """
+    Login user in traditional way
+
+    Args:
+        email: user email
+        password: user password
     Raises:
         webauth.AccessDenied: invalid credentials
     """
@@ -588,6 +677,8 @@ def init(app,
          smtp=None,
          fix_ssl=True):
     """
+    Initalize framework
+
     Args:
         app: Flask app
         db: pyaltt2.db.Database object
@@ -595,6 +686,9 @@ def init(app,
         base_prefix: base prefix for auth urls
         root_uri: default next uri
         providers: oauth2 providers list
+        smtp: pyaltt2.mail.SMTP object, required if email confirmations are
+        used
+        fix_ssl: force SSL everywhere (True by default)
     """
 
     if not app.config.get('SECRET_KEY'):
@@ -722,6 +816,9 @@ def init(app,
 
 
 def cleanup():
+    """
+    Clear expired confirmation actions and remove expired non-confirmed users
+    """
     _d.kv.cleanup()
     _d.db.query(
         'user.delete.unconfirmed',
