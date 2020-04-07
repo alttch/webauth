@@ -3,7 +3,6 @@ __copyright__ = 'Copyright (C) 2020 Altertech'
 __license__ = 'MIT'
 __version__ = '0.0.4'
 
-# TODO: auto-tests
 # TODO: 2fa
 
 from flask import redirect, session, url_for, Response, request
