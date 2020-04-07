@@ -1,3 +1,4 @@
+pyyaml
 pyaltt2
 flask
 loginpass
