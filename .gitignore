@@ -3,10 +3,10 @@ webauth.egg-info
 build
 dist
 Makefile
-example/config.yml
-example/test.yml
-example/test-data.yml
-example/geckodriver.log
+tests/config.yml
+tests/test.yml
+tests/test-data.yml
+tests/geckodriver.log
 .idea/
 *.pyc
 doc/_build

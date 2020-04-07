@@ -117,6 +117,7 @@ def _get_pop3_mail(login=None):
 
 def _get_pop3_link(login=None):
     payload = str(_get_pop3_mail(login=login).get_payload()[0])
+    logging.info(payload)
     return re.search('(?P<url>https?://[^\s]+)', payload).group('url')
 
 
@@ -140,27 +141,31 @@ def test002_register_login_logout():
     _clear_pop3()
     d = _d.driver
     d.get('https://webauth-test.lab.altt.ch/')
-    # register
-    def fill_register(email, password):
-        d.find_element_by_id('do_reg').click()
-        d.find_element_by_id('email_reg').send_keys(email)
-        d.find_element_by_id('password').send_keys(password)
-        d.find_element_by_id('password2').send_keys(password)
-        d.find_element_by_id('reg_submit').click()
-
-    def login(email, password):
-        d.find_element_by_id('email').send_keys(email)
-        d.find_element_by_id('pass').send_keys(password)
-        d.find_element_by_id('login_submit').click()
-        assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
-
-    def logout():
-        d.find_element_by_id('logout').click()
-        assert d.current_url == 'https://webauth-test.lab.altt.ch/'
 
     def click(elem):
         d.find_element_by_id(elem).click()
 
+    def fill(elem, value):
+        d.find_element_by_id(elem).send_keys(value)
+
+    def fill_register(email, password):
+        click('do_reg')
+        fill('email_reg', email)
+        fill('password', password)
+        fill('password2', password)
+        click('reg_submit')
+
+    def login(email, password):
+        fill('email', email)
+        fill('pass', password)
+        click('login_submit')
+        assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
+
+    def logout():
+        click('logout')
+        assert d.current_url == 'https://webauth-test.lab.altt.ch/'
+
+    # register
     fill_register(config['email'][0], '123')
     assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
     assert d.find_element_by_id('resend-confirm') is not None
@@ -179,18 +184,18 @@ def test002_register_login_logout():
     logout()
     # lost password
     _clear_pop3()
-    d.find_element_by_id('email').send_keys(config['email'][0])
-    d.find_element_by_id('pass').send_keys('111')
+    fill('email', config['email'][0])
+    fill('pass', '111')
     click('login_submit')
     assert 'ERROR' in d.title
     click('next')
     click('do_forgot')
-    d.find_element_by_id('email_remind').send_keys(config['email'][0])
+    fill('email_remind', config['email'][0])
     click('remind_submit')
     d.get(_get_pop3_link())
     assert d.current_url == 'https://webauth-test.lab.altt.ch/set-password'
-    d.find_element_by_id('password').send_keys('111')
-    d.find_element_by_id('password2').send_keys('111')
+    fill('password', '111')
+    fill('password2', '111')
     click('submit_change')
     assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
     logout()
@@ -205,23 +210,34 @@ def test002_register_login_logout():
     # login again
     login(config['email'][0], '111')
     # set password
-    d.find_element_by_id('set-password').click()
+    click('set-password')
     assert d.current_url == 'https://webauth-test.lab.altt.ch/set-password'
     # fill wrong old password
-    d.find_element_by_id('oldpass').send_keys('xyz')
-    d.find_element_by_id('password').send_keys('123')
-    d.find_element_by_id('password2').send_keys('123')
+    fill('oldpass', 'xyz')
+    fill('password', '123')
+    fill('password2', '123')
     click('submit_change')
     assert 'ERROR' in d.title
-    d.find_element_by_id('next').click()
+    click('next')
     # correctly change password
-    d.find_element_by_id('oldpass').send_keys('111')
-    d.find_element_by_id('password').send_keys('123')
-    d.find_element_by_id('password2').send_keys('123')
+    fill('oldpass', '111')
+    fill('password', '123')
+    fill('password2', '123')
     click('submit_change')
     # login again
     assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
     logout()
     login(config['email'][0], '123')
+    # change email
+    _clear_pop3()
+    _clear_pop3(login=config['pop3']['login'][1])
+    click('set-email')
+    fill('email', config['email'][1])
+    click('submit_change')
+    d.get(_get_pop3_link())
+    d.get(_get_pop3_link(login=config['pop3']['login'][1]))
+    # login with new email
+    logout()
+    login(config['email'][1], '123')
     # cleanup
-    d.find_element_by_id('delete-account').click()
+    click('delete-account')
