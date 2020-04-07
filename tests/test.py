@@ -1,10 +1,8 @@
 #!/usr/bin/env pytest
 
 # TODO
-# test add oauth
 # test delete oauth (including last one)
 # test add email with oauth login
-# test change email
 # test oauth is in use
 
 import pytest
@@ -239,5 +237,11 @@ def test002_register_login_logout():
     # login with new email
     logout()
     login(config['email'][1], '123')
+    # add oauth
+    if not os.getenv('SKIP_OAUTH'):
+        click('connect-github')
+        logout()
+        click('login-github')
+        assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
     # cleanup
     click('delete-account')
