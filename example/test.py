@@ -84,13 +84,20 @@ def new_email_set_ok():
                      message='New email address is set',
                      next_uri='/dashboard')
 
+@app.route('/remind-ok')
+def remind_ok():
+    webauth.clear_confirmed_session()
+    return serve_tpl('ok',
+                     message='Please check your email for the info',
+                     next_uri='/')
 
 @app.route('/old-email-remove-ok')
 def old_email_remove_ok():
     return serve_tpl(
         'ok',
         message=
-        'Completed. Now check your new email address for the confirmation link', next_uri='/dashboard')
+        'Completed. Now check your new email address for the confirmation link',
+        next_uri='/dashboard')
 
 
 @app.route('/set-password', methods=['GET', 'POST'])
@@ -121,9 +128,12 @@ def set_email():
         if request.method == 'GET':
             return serve_tpl('set-email', email=webauth.get_user_email())
         else:
+            email = request.form.get('email')
+            if email == webauth.get_user_email():
+                return redirect('/dashboard')
             try:
                 webauth.change_user_email(
-                    request.form.get('email'),
+                    email,
                     next_action_uri_oldaddr='/old-email-remove-ok',
                     next_action_uri='/new-email-set-ok'
                     if webauth.get_user_email() else '/set-password')
@@ -139,7 +149,7 @@ def remind():
     email = request.form.get('email')
     try:
         webauth.send_reset_password(email, next_action_uri='/set-password')
-        return redirect('/')
+        return redirect('/remind-ok')
     except LookupError:
         return serve_tpl('error', message='user does not exists', next_uri='/')
 
