@@ -25,7 +25,7 @@ email_sender = 'webauth-test@lab.altt.ch'
 Default email sender (From: field)
 """
 email_tpl = {
-    'confirm.email': {
+    'email.confirm': {
         'subject': 'Please confirm your email address',
         'text': 'Please click on the link {action_link} '
                 'to confirm your email address',
@@ -33,7 +33,7 @@ email_tpl = {
                 ' to confirm your email address</body></html>',
         'expires': 86400
     },
-    'change.email': {
+    'email.change': {
         'subject': 'Please allow email address change',
         'text': 'Please click on the link {action_link} '
                 'to allow email address change',
@@ -41,7 +41,7 @@ email_tpl = {
                 ' to allow email address change</body></html>',
         'expires': 86400
     },
-    'reset.password': {
+    'account.remind': {
         'subject':
             'Password reset',
         'text':
@@ -63,9 +63,9 @@ E-mail templates. Each template contains fields
 
 Templates
 
-* confirm.email: email confirmation
-* change.email: change email - change old emal confirmation on email change
-* reset.password: password reset
+* email.confirm: email confirmation
+* email.change: change email - change old emal confirmation on email change
+* password.reset: password reset
 """
 
 handlers = {}
@@ -157,20 +157,22 @@ def register_handler(event, handler):
 
     Events:
 
-    * register: new user registration (user_id=user_id)
-    * login: login (user_id=user_id)
-    * remind: password reset request (user_id=user_id)
-    * delete: user account deletion (user_id=user_id)
-    * logout: logout event
+    * account.register: new user registration (user_id=user_id)
+    * account.login: login (user_id=user_id)
+    * account.remind: password reset request (user_id=user_id)
+    * account.delete: user account deletion (user_id=user_id)
+    * account.logout: logout event
+    * action.confirm: called on confirmation action (key, value)
     * exception.provider_exists: attempt to register with oauth provider
       which's already assigned to another user
     * exception.provider_failed: oauth provider registration failure
     * exception.registration_denied: account registration attempt when
       allow_registration is False
 
-    For handlers: exception.provider_exists, exception.provider_failed,
-    exception.registration_denied, logout, confirm, exception.confirm_nokey if
-    not None value is returned, it's returned by web method as-is
+    For handlers: account.logout, action.confirm, exception.provider_exists,
+    exception.provider_failed, exception.registration_denied,
+    exception.confirm_nokey if not None value is returned, it's returned by web
+    method as-is
     """
     logger.debug(f'registered event handler for {event}: {handler}')
     handlers[event] = handler
@@ -252,7 +254,7 @@ def set_user_password(password):
                            password=sha256(
                                password.encode()).hexdigest()).rowcount:
             raise LookupError
-        _log_user_event('password')
+        _log_user_event('password.change')
     else:
         raise AccessDenied
 
@@ -282,7 +284,7 @@ def change_user_email(email, next_action_uri_oldaddr=None,
         if _d.db.query('user.select.id', email=email).rowcount:
             raise ResourceAlreadyExists
         old_email = get_user_email()
-        _log_user_event('change.email:{old_email}:{email}')
+        _log_user_event('email.change:{old_email}:{email}')
         if old_email:
             _send_email_change_old_addr(user_id, old_email, email,
                                         next_action_uri_oldaddr,
@@ -329,7 +331,7 @@ def delete_user_provider(provider, sub):
     """
     user_id = get_user_id()
     if user_id:
-        _log_user_event(f'delete:{provider}')
+        _log_user_event(f'provider.delete:{provider}')
         if not get_user_email() and _d.db.query('user.provider.count.except',
                                                 id=user_id,
                                                 provider=provider,
@@ -356,8 +358,8 @@ def delete_user():
     """
     user_id = get_user_id()
     if user_id:
-        _log_user_event('delete')
-        _call_handler('delete', user_id=user_id)
+        _log_user_event('account.delete')
+        _call_handler('account.delete', user_id=user_id)
         if not _d.db.query('user.delete', id=user_id).rowcount:
             raise LookupError
         return logout()
@@ -432,8 +434,8 @@ def _handle_user_auth(user_info, provider):
                     provider=provider,
                     sub=user_info.sub,
                     name=user_info.name)
-        _log_user_event('register')
-        _call_handler('register', user_id=user_id, user_info=user_info)
+        _log_user_event('account.register')
+        _call_handler('account.register', user_id=user_id, user_info=user_info)
     else:
         if user_id and result.id != user_id:
             raise ResourceAlreadyExists
@@ -481,8 +483,8 @@ def logout():
     """
     result = None
     if get_user_id():
-        result = _call_handler('logout')
-        _log_user_event('logout')
+        result = _call_handler('account.logout')
+        _log_user_event('account.logout')
         for i in ('id', 'picture', 'confirmed', 'confirmed_session'):
             try:
                 del session[f'{_d.x_prefix}user_{i}']
@@ -500,8 +502,8 @@ def _send_email_change_old_addr(user_id,
                                 new_email,
                                 next_action_uri_oldaddr=None,
                                 next_action_uri=None):
-    tpl = email_tpl['change.email']
-    link = generate_confirm_action(method='change.email',
+    tpl = email_tpl['email.change']
+    link = generate_confirm_action(method='email.change',
                                    user_id=user_id,
                                    email=email,
                                    new_email=new_email,
@@ -516,8 +518,8 @@ def _send_email_change_old_addr(user_id,
 
 
 def _send_reset_email(user_id, email, next_action_uri=None):
-    tpl = email_tpl['reset.password']
-    link = generate_confirm_action(method='reset.password',
+    tpl = email_tpl['account.remind']
+    link = generate_confirm_action(method='account.remind',
                                    user_id=user_id,
                                    email=email,
                                    expires=tpl['expires'],
@@ -532,8 +534,8 @@ def _send_reset_email(user_id, email, next_action_uri=None):
 def confirm_email_ownership(email,
                             user_id=None,
                             next_action_uri=None,
-                            method='confirm.email',
-                            tpl_id='confirm.email'):
+                            method='email.confirm',
+                            tpl_id='email.confirm'):
     """
     Confirm email address ownership
 
@@ -541,7 +543,7 @@ def confirm_email_ownership(email,
         email: email address to confirm
         user_id: user id (if None, current user id is used)
         next_action_uri: redirect URI after email confirmation
-        method: confirm action method (default: "confirm.email", confirms and
+        method: confirm action method (default: "email.confirm", confirms and
             sets email to user's account)
         tpl_id: email template ID
     """
@@ -583,7 +585,7 @@ def register(email, password, confirmed=True, next_action_uri=None):
             raise ResourceAlreadyExists(e)
         session[f'{_d.x_prefix}user_id'] = user_id
         session[f'{_d.x_prefix}user_confirmed'] = confirmed
-        _log_user_event('register')
+        _log_user_event('account.register')
         if not confirmed:
             confirm_email_ownership(user_id=user_id,
                                     email=email,
@@ -620,7 +622,7 @@ def resend_email_confirm(next_action_uri=None):
                             next_action_uri=next_action_uri)
 
 
-def send_reset_password(email, next_action_uri=None):
+def send_account_remind(email, next_action_uri=None):
     """
     Send password reset link to user
 
@@ -634,8 +636,8 @@ def send_reset_password(email, next_action_uri=None):
     """
     user = _d.db.query("user.select.id", email=email).fetchone()
     if user:
-        _call_handler('remind', user_id=user.id)
-        _log_user_event(f'remind:{email}', user_id=user.id)
+        _call_handler('account.remind', user_id=user.id)
+        _log_user_event(f'account.remind:{email}', user_id=user.id)
         _send_reset_email(user_id=user.id,
                           email=email,
                           next_action_uri=next_action_uri)
@@ -661,8 +663,8 @@ def login(email, password):
         touch(user.id)
         session[f'{_d.x_prefix}user_id'] = user.id
         session[f'{_d.x_prefix}user_confirmed'] = user.confirmed
-        _call_handler('login', user_id=user.id)
-        _log_user_event('login')
+        _call_handler('account.login', user_id=user.id)
+        _log_user_event('account.login')
     else:
         raise AccessDenied
 
@@ -693,7 +695,7 @@ def handle_confirm(key):
     try:
         value = _d.kv.get(key, delete=True)
         confirm_actions[value['method']](**value.get('kw', {}))
-        response = _call_handler('confirm', key=key, value=value)
+        response = _call_handler('action.confirm', key=key, value=value)
         return response if response else redirect(value.get(
             'next', _d.root_uri))
     except LookupError:
@@ -702,7 +704,7 @@ def handle_confirm(key):
                                                   status=404)
 
 
-def confirm_user(user_id, email, _log=True):
+def _confirm_user(user_id, email, _log=True):
     if not _d.db.query('user.confirm.email',
                        id=user_id,
                        email=email,
@@ -711,15 +713,15 @@ def confirm_user(user_id, email, _log=True):
     session[f'{_d.x_prefix}user_id'] = user_id
     session[f'{_d.x_prefix}user_confirmed'] = True
     session[f'{_d.x_prefix}user_confirmed_session'] = True
-    if _log: _log_user_event(f'confirm.email:{email}')
+    if _log: _log_user_event(f'email.confirm:{email}')
 
 
-def reset_password(user_id, email):
-    confirm_user(user_id, email, _log=False)
-    _log_user_event(f'reset:{email}')
+def _remind_account(user_id, email):
+    _confirm_user(user_id, email, _log=False)
+    _log_user_event(f'account.remind:{email}')
 
 
-def change_email(user_id, email, new_email, next_action_uri):
+def _change_email(user_id, email, new_email, next_action_uri):
     _log_user_event('change.email', user_id=user_id)
     confirm_email_ownership(user_id=user_id,
                             email=new_email,
@@ -810,8 +812,8 @@ def init(app,
                 session[f'{_d.x_prefix}user_id'] = user_id
                 session[f'{_d.x_prefix}user_picture'] = user_info.picture
                 session[f'{_d.x_prefix}user_confirmed'] = True
-                _call_handler('login', user_id=user_id)
-                _log_user_event(f'login:{provider}')
+                _call_handler('account.login', user_id=user_id)
+                _log_user_event(f'account.login:{provider}')
                 return redirect(_next_uri())
             except ResourceAlreadyExists:
                 response = _call_handler('exception.provider_exists')
@@ -886,9 +888,9 @@ def cleanup():
 
 
 confirm_actions = {
-    'confirm.email': confirm_user,
-    'reset.password': reset_password,
-    'change.email': change_email
+    'email.confirm': _confirm_user,
+    'account.remind': _remind_account,
+    'change.email': _change_email
 }
 """
 Confirm action methods. By default, contains confirm action handlers for

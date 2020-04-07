@@ -148,7 +148,7 @@ def set_email():
 def remind():
     email = request.form.get('email')
     try:
-        webauth.send_reset_password(email, next_action_uri='/set-password')
+        webauth.send_account_remind(email, next_action_uri='/set-password')
         return redirect('/remind-ok')
     except LookupError:
         return serve_tpl('error', message='user does not exists', next_uri='/')
