@@ -288,6 +288,7 @@ def get_user_providers():
     Get list of user oauth2 providers
 
     Returns: list of dicts [{provider: infodict}, ...]
+
     Raises:
         AccessDenied: if user is not logged in
     """
