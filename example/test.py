@@ -1,5 +1,14 @@
 #!/usr/bin/env pytest
 
+# TODO
+# test login
+# test logout
+# test duplicate email
+# test add oauth
+# test delete oauth (including last one)
+# test add email with oauth login
+# test change email
+
 import pytest
 import time
 import os
@@ -69,9 +78,11 @@ def init():
         pass
 
 
-def _login_pop3(wait_mail=None):
+def _login_pop3(login=None, wait_mail=None):
     pop3 = POP3(host=config['pop3']['host'])
-    pop3.user(config['pop3']['login'])
+    if login is None:
+        login = config['pop3']['login'][0]
+    pop3.user(login)
     pop3.pass_(config['pop3']['password'])
     if wait_mail:
         for i in range(wait_mail * 10):
@@ -83,8 +94,8 @@ def _login_pop3(wait_mail=None):
     return pop3
 
 
-def _get_pop3_mail():
-    pop3 = _login_pop3(wait_mail=5)
+def _get_pop3_mail(login=None):
+    pop3 = _login_pop3(login=login, wait_mail=5)
     msg = email.message_from_string('\n'.join(
         [x.decode() for x in pop3.retr(1)[1]]))
     pop3.dele(1)
@@ -92,13 +103,13 @@ def _get_pop3_mail():
     return msg
 
 
-def _get_pop3_link():
-    payload = str(_get_pop3_mail().get_payload()[0])
+def _get_pop3_link(login=None):
+    payload = str(_get_pop3_mail(login=login).get_payload()[0])
     return re.search('(?P<url>https?://[^\s]+)', payload).group('url')
 
 
-def _clear_pop3():
-    pop3 = _login_pop3()
+def _clear_pop3(login=None):
+    pop3 = _login_pop3(login=login)
     for i in range(len(pop3.list()[1])):
         pop3.dele(i + 1)
     pop3.quit()
