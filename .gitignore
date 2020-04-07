@@ -4,6 +4,8 @@ build
 dist
 Makefile
 example/config.yml
+example/test.yml
+example/geckodriver.log
 .idea/
 *.pyc
 doc/_build
