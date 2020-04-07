@@ -32,7 +32,7 @@ email_tpl = {
                 ' to confirm your email address</body></html>',
         'expires': 86400
     },
-    'remove.email': {
+    'change.email': {
         'subject': 'Please allow email address change',
         'text': 'Please click on the link {action_link} '
                 'to allow email address change',
@@ -63,7 +63,7 @@ E-mail templates. Each template contains fields
 Templates
 
 * confirm.email: email confirmation
-* confirm.email: remove email - remove old emal confirmation on email change
+* change.email: change email - change old emal confirmation on email change
 * reset.password: password reset
 """
 
@@ -261,6 +261,17 @@ def change_user_email(email, next_action_uri_oldaddr=None,
     """
     E-mail change action
 
+    Change email of current user. If user already has email set, he must
+    do two confirmations: firstly getting letter to the old, then to the new
+    address
+
+    Args:
+        email: new user's email address
+        next_action_uri_oldaddr: redirect URI after old address ownership is
+            confirmed
+        next_action_uri: redirect URI after new address ownership is confirmed
+
+
     Raises:
         webauth.AccessDenied: if user is not logged in
         webauth.ResourceAlreadyExists: email is already in system
@@ -276,9 +287,9 @@ def change_user_email(email, next_action_uri_oldaddr=None,
                                         next_action_uri_oldaddr,
                                         next_action_uri)
         else:
-            _send_confirmation_email(user_id,
-                                     email,
-                                     next_action_uri=next_action_uri)
+            confirm_email_ownership(user_id=user_id,
+                                    email=email,
+                                    next_action_uri=next_action_uri)
     else:
         raise AccessDenied
 
@@ -488,14 +499,14 @@ def _send_email_change_old_addr(user_id,
                                 new_email,
                                 next_action_uri_oldaddr=None,
                                 next_action_uri=None):
-    tpl = email_tpl['remove.email']
-    link = generate_external_action(method='remove.oldmail',
-                                    user_id=user_id,
-                                    email=email,
-                                    new_email=new_email,
-                                    next_action_uri=next_action_uri,
-                                    expires=tpl['expires'],
-                                    next_uri=next_action_uri_oldaddr)
+    tpl = email_tpl['change.email']
+    link = generate_confirm_action(method='change.email',
+                                   user_id=user_id,
+                                   email=email,
+                                   new_email=new_email,
+                                   next_action_uri=next_action_uri,
+                                   expires=tpl['expires'],
+                                   next_uri=next_action_uri_oldaddr)
     _d.smtp.sendmail(email_sender,
                      email,
                      subject=tpl['subject'],
@@ -505,11 +516,11 @@ def _send_email_change_old_addr(user_id,
 
 def _send_reset_email(user_id, email, next_action_uri=None):
     tpl = email_tpl['reset.password']
-    link = generate_external_action(method='reset.password',
-                                    user_id=user_id,
-                                    email=email,
-                                    expires=tpl['expires'],
-                                    next_uri=next_action_uri)
+    link = generate_confirm_action(method='reset.password',
+                                   user_id=user_id,
+                                   email=email,
+                                   expires=tpl['expires'],
+                                   next_uri=next_action_uri)
     _d.smtp.sendmail(email_sender,
                      email,
                      subject=tpl['subject'],
@@ -517,13 +528,29 @@ def _send_reset_email(user_id, email, next_action_uri=None):
                      html=tpl['html'].format(action_link=link))
 
 
-def _send_confirmation_email(user_id, email, next_action_uri=None):
-    tpl = email_tpl['confirm.email']
-    link = generate_external_action(method='confirm.email',
-                                    user_id=user_id,
-                                    email=email,
-                                    expires=tpl['expires'],
-                                    next_uri=next_action_uri)
+def confirm_email_ownership(email,
+                            user_id=None,
+                            next_action_uri=None,
+                            method='confirm.email',
+                            tpl_id='confirm.email'):
+    """
+    Confirm email address ownership
+
+    Args:
+        email: email address to confirm
+        user_id: user id (if None, current user id is used)
+        next_action_uri: redirect URI after email confirmation
+        method: confirm action method (default: "confirm.email", confirms and
+            sets email to user's account)
+        tpl_id: email template ID
+    """
+    if user_id is None: user_id = get_user_id()
+    tpl = email_tpl[tpl_id]
+    link = generate_confirm_action(method=method,
+                                   user_id=user_id,
+                                   email=email,
+                                   expires=tpl['expires'],
+                                   next_uri=next_action_uri)
     _d.smtp.sendmail(email_sender,
                      email,
                      subject=tpl['subject'],
@@ -557,9 +584,9 @@ def register(email, password, confirmed=True, next_action_uri=None):
         session[f'{_d.x_prefix}user_confirmed'] = confirmed
         _log_user_event('register')
         if not confirmed:
-            _send_confirmation_email(user_id=user_id,
-                                     email=email,
-                                     next_action_uri=next_action_uri)
+            confirm_email_ownership(user_id=user_id,
+                                    email=email,
+                                    next_action_uri=next_action_uri)
 
         return redirect(_next_uri())
     else:
@@ -588,9 +615,8 @@ def resend_email_confirm(next_action_uri=None):
     Args:
         next_action_uri: redirect URI after email confirmation
     """
-    _send_confirmation_email(user_id=session[f'{_d.x_prefix}user_id'],
-                             email=get_user_email(),
-                             next_action_uri=next_action_uri)
+    confirm_email_ownership(email=get_user_email(),
+                            next_action_uri=next_action_uri)
 
 
 def send_reset_password(email, next_action_uri=None):
@@ -640,7 +666,21 @@ def login(email, password):
         raise AccessDenied
 
 
-def generate_external_action(method, expires=None, next_uri=None, **kwargs):
+def generate_confirm_action(method, expires=None, next_uri=None, **kwargs):
+    """
+    Generates confirmation action
+
+    The method should be defined in confirm_actions dict
+
+    Args:
+        method: confirmation methid id
+        expires: expiration time (seconds or datetime.timedelta)
+        next_uri: redirect URI after action is executed
+        kwargs: passed to method as-is
+
+    Returns:
+        confirmation URL
+    """
     d = {'method': method, 'kw': kwargs}
     if next_uri:
         d['next'] = next_uri
@@ -651,7 +691,7 @@ def generate_external_action(method, expires=None, next_uri=None, **kwargs):
 def handle_confirm(key):
     try:
         value = _d.kv.get(key, delete=True)
-        external_actions[value['method']](**value.get('kw', {}))
+        confirm_actions[value['method']](**value.get('kw', {}))
         response = _call_handler('confirm', key=key, value=value)
         return response if response else redirect(value.get(
             'next', _d.root_uri))
@@ -678,11 +718,11 @@ def reset_password(user_id, email):
     _log_user_event(f'reset:{email}')
 
 
-def remove_oldmail(user_id, email, new_email, next_action_uri):
-    _log_user_event('confirm.email_remove', user_id=user_id)
-    _send_confirmation_email(user_id,
-                             new_email,
-                             next_action_uri=next_action_uri)
+def change_email(user_id, email, new_email, next_action_uri):
+    _log_user_event('change.email', user_id=user_id)
+    confirm_email_ownership(user_id=user_id,
+                            email=new_email,
+                            next_action_uri=next_action_uri)
 
 
 def init(app,
@@ -844,8 +884,12 @@ def cleanup():
             user_unconfirmed_expires, int) else user_unconfirmed_expires)
 
 
-external_actions = {
+confirm_actions = {
     'confirm.email': confirm_user,
     'reset.password': reset_password,
-    'remove.oldmail': remove_oldmail
+    'change.email': change_email
 }
+"""
+Confirm action methods. By default, contains confirm action handlers for
+confirm.email, reset.password and change.email
+"""
