@@ -4,7 +4,6 @@ __license__ = 'MIT'
 __version__ = '0.0.1'
 
 # TODO: docs
-# TODO: logging
 # TODO: 2fa
 
 from flask import redirect, session, url_for, Response, request
