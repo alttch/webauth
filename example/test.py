@@ -8,6 +8,7 @@
 # test delete oauth (including last one)
 # test add email with oauth login
 # test change email
+# test oauth is in use
 
 import pytest
 import time
@@ -64,10 +65,19 @@ def init():
         if c > 50: raise TimeoutError
     d = _d.driver
     # github login
+    _clear_pop3()
     d.get('https://github.com/login')
     d.find_element_by_id('login_field').send_keys(config['github']['login'])
     d.find_element_by_id('password').send_keys(config['github']['password'])
     d.find_element_by_class_name('btn-primary').click()
+    try:
+        otp = d.find_element_by_id('otp')
+        msg = _get_pop3_mail()
+        code = msg.get_payload().split('Verification code: ')[1].split('\n')[0]
+        otp.send_keys(code)
+        d.find_element_by_class_name('btn-primary').click()
+    except NoSuchElementException:
+        pass
     yield
     _d.driver.quit()
     with open(pidfile) as fh:
@@ -80,17 +90,19 @@ def init():
 
 
 def _login_pop3(login=None, wait_mail=None):
-    pop3 = POP3(host=config['pop3']['host'])
     if login is None:
         login = config['pop3']['login'][0]
-    pop3.user(login)
-    pop3.pass_(config['pop3']['password'])
-    if wait_mail:
-        for i in range(wait_mail * 10):
-            if len(pop3.list()[1]):
-                break
-            time.sleep(0.1)
-        else:
+    c = 0
+    while True:
+        pop3 = POP3(host=config['pop3']['host'])
+        pop3.user(login)
+        pop3.pass_(config['pop3']['password'])
+        if not wait_mail or len(pop3.list()[1]):
+            break
+        c += 0.5
+        pop3.quit()
+        time.sleep(0.5)
+        if c > wait_mail:
             raise TimeoutError
     return pop3
 
