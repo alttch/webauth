@@ -77,7 +77,9 @@ def click(elem):
     _d.driver.find_element_by_id(elem).click()
     if elem.endswith('-github'):
         try:
+            time.sleep(0.1)
             click('js-oauth-authorize-btn')
+            time.sleep(0.5)
         except NoSuchElementException:
             pass
 
