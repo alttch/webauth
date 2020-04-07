@@ -1,4 +1,4 @@
-#!/usr/bin/env pytest
+#!/usr/bin/env pytest -x
 
 import pytest
 import time
