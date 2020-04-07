@@ -434,7 +434,7 @@ def _handle_user_auth(user_info, provider):
                     provider=provider,
                     sub=user_info.sub,
                     name=user_info.name)
-        _log_user_event('account.register')
+        _log_user_event('account.register', user_id=user_id)
         _call_handler('account.register', user_id=user_id, user_info=user_info)
     else:
         if user_id and result.id != user_id:
@@ -585,7 +585,7 @@ def register(email, password, confirmed=True, next_action_uri=None):
             raise ResourceAlreadyExists(e)
         session[f'{_d.x_prefix}user_id'] = user_id
         session[f'{_d.x_prefix}user_confirmed'] = confirmed
-        _log_user_event('account.register')
+        _log_user_event('account.register', user_id=user_id)
         if not confirmed:
             confirm_email_ownership(user_id=user_id,
                                     email=email,
