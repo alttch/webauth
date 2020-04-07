@@ -74,11 +74,68 @@ def dashboard():
         return redirect('/')
 
 
+@app.route('/new-email-set-ok')
+def new_email_set_ok():
+    webauth.clear_confirmed_session()
+    return serve_tpl('ok',
+                     message='New email address is set',
+                     next_uri='/dashboard')
+
+
+@app.route('/old-email-remove-ok')
+def old_email_remove_ok():
+    return serve_tpl(
+        'ok',
+        message=
+        'Completed. Now check your new email address for the confirmation link', next_uri='/dashboard')
+
+
+@app.route('/set-password', methods=['GET', 'POST'])
+def set_password():
+    if webauth.is_authenticated():
+        if request.method == 'GET':
+            return serve_tpl('set-password',
+                             confirmed_session=webauth.is_confirmed_session())
+        else:
+            try:
+                if not webauth.is_confirmed_session():
+                    webauth.check_user_password(request.form.get('oldpass'),
+                                                allow_empty=True)
+            except webauth.AccessDenied:
+                return serve_tpl('error',
+                                 message='old password is not valid',
+                                 next_uri='/set-password')
+            webauth.set_user_password(request.form.get('password'))
+            webauth.clear_confirmed_session()
+            return redirect('/dashboard')
+    else:
+        return redirect('/')
+
+
+@app.route('/set-email', methods=['GET', 'POST'])
+def set_email():
+    if webauth.is_authenticated():
+        if request.method == 'GET':
+            return serve_tpl('set-email', email=webauth.get_user_email())
+        else:
+            try:
+                webauth.change_user_email(
+                    request.form.get('email'),
+                    next_action_uri_oldaddr='/old-email-remove-ok',
+                    next_action_uri='/new-email-set-ok'
+                    if webauth.get_user_email() else '/set-password')
+                return redirect('/dashboard')
+            except webauth.ResourceAlreadyExists:
+                return serve_tpl('error', message='E-mail is already in system')
+    else:
+        return redirect('/')
+
+
 @app.route('/remind', methods=['POST'])
 def remind():
     email = request.form.get('email')
     try:
-        webauth.send_reset_password(email, next_action_uri='/dashboard')
+        webauth.send_reset_password(email, next_action_uri='/set-password')
         return redirect('/')
     except LookupError:
         return serve_tpl('error', message='user does not exists', next_uri='/')

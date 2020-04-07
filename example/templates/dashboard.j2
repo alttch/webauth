@@ -20,6 +20,12 @@
   {% endfor %}
   <br />
   E-Mail: {{ email }}
+  {% if email %}
+    <a href="/set-email">Change email</a>
+    <a href="/set-password">Change password</a>
+  {% else %}
+    <a href="/set-email">Set email</a>
+  {% endif %}
   <br />
   Connect more providers:
   <div>

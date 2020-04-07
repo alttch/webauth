@@ -1,0 +1,6 @@
+{% extends "default.j2" %}
+{% block title %}OK{% endblock %}
+{% block content %}
+  {{ message }}
+  <input type="button" value="OK" onclick="document.location='{{ next_uri }}'" />
+{% endblock %}

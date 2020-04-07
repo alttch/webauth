@@ -5,6 +5,7 @@ __version__ = '0.0.1'
 
 # TODO: docs
 # TODO: logging
+# TODO: 2fa
 
 from flask import redirect, session, url_for, Response, request
 from authlib.flask.client import OAuth
@@ -27,6 +28,14 @@ email_tpl = {
                 'to confirm your email address',
         'html': '<html><body>Please click <a href="{action_link}">here</a>'
                 ' to confirm your email address</body></html>',
+        'expires': 86400
+    },
+    'remove.email': {
+        'subject': 'Please allow email address change',
+        'text': 'Please click on the link {action_link} '
+                'to allow email address change',
+        'html': '<html><body>Please click <a href="{action_link}">here</a>'
+                ' to allow email address change</body></html>',
         'expires': 86400
     },
     'reset.password': {
@@ -147,6 +156,25 @@ def _format_prefix(base_prefix):
     return x_prefix, dot_prefix
 
 
+def check_user_password(password, allow_empty=False):
+    """
+    Returns:
+        True if password match
+    Raises:
+        webauth.AccessDenied: password doesn't match or user is not logged in
+    """
+    if password is None:
+        password = ''
+    user_id = get_user_id()
+    if user_id:
+        if _d.db.query('user.password.check.orempty'
+                       if allow_empty else 'user.password.check',
+                       id=user_id,
+                       password=sha256(password.encode()).hexdigest()).rowcount:
+            return True
+    raise AccessDenied
+
+
 def set_user_password(password):
     """
     Set user password
@@ -161,8 +189,36 @@ def set_user_password(password):
     if user_id:
         if not _d.db.query('user.password.set',
                            id=user_id,
-                           password=sha256(password).hexdigest()).rowcount:
+                           password=sha256(
+                               password.encode()).hexdigest()).rowcount:
             raise LookupError
+        _log_user_event('password')
+    else:
+        raise AccessDenied
+
+
+def change_user_email(email, next_action_uri_oldaddr=None,
+                      next_action_uri=None):
+    """
+    E-mail change action
+
+    Raises:
+        webauth.AccessDenied: if user is not logged in
+        webauth.ResourceAlreadyExists: email is already in system
+    """
+    user_id = get_user_id()
+    if user_id:
+        if _d.db.query('user.select.id', email=email).rowcount:
+            raise ResourceAlreadyExists
+        old_email = get_user_email()
+        if old_email:
+            _send_email_change_old_addr(user_id, old_email, email,
+                                        next_action_uri_oldaddr,
+                                        next_action_uri)
+        else:
+            _send_confirmation_email(user_id,
+                                     email,
+                                     next_action_uri=next_action_uri)
     else:
         raise AccessDenied
 
@@ -257,6 +313,17 @@ def is_confirmed():
     return session.get(f'{_d.x_prefix}user_confirmed', False)
 
 
+def is_confirmed_session():
+    return session.get(f'{_d.x_prefix}user_confirmed_session', False)
+
+
+def clear_confirmed_session():
+    try:
+        del session[f'{_d.x_prefix}user_confirmed_session']
+    except:
+        pass
+
+
 def _handle_user_auth(user_info, provider):
     user_id = get_user_id()
     result = _d.db.query('user.oauth.get', sub=user_info.sub,
@@ -321,6 +388,26 @@ def logout():
 
 def touch(user_id):
     _d.db.query('user.touch', id=user_id, d=datetime.datetime.now())
+
+
+def _send_email_change_old_addr(user_id,
+                                email,
+                                new_email,
+                                next_action_uri_oldaddr=None,
+                                next_action_uri=None):
+    tpl = email_tpl['remove.email']
+    link = generate_external_action(method='remove.oldmail',
+                                    user_id=user_id,
+                                    email=email,
+                                    new_email=new_email,
+                                    next_action_uri=next_action_uri,
+                                    expires=tpl['expires'],
+                                    next_uri=next_action_uri_oldaddr)
+    _d.smtp.sendmail(email_sender,
+                     email,
+                     subject=tpl['subject'],
+                     text=tpl['text'].format(action_link=link),
+                     html=tpl['html'].format(action_link=link))
 
 
 def _send_reset_email(user_id, email, next_action_uri=None):
@@ -458,12 +545,20 @@ def confirm_user(user_id, email, _log=True):
         raise LookupError
     session[f'{_d.x_prefix}user_id'] = user_id
     session[f'{_d.x_prefix}user_confirmed'] = True
+    session[f'{_d.x_prefix}user_confirmed_session'] = True
     if _log: _log_user_event(f'confirm.email:{email}')
 
 
 def reset_password(user_id, email):
     confirm_user(user_id, email, _log=False)
     _log_user_event(f'reset:{email}')
+
+
+def remove_oldmail(user_id, email, new_email, next_action_uri):
+    _log_user_event('confirm.email_remove', user_id=user_id)
+    _send_confirmation_email(user_id,
+                             new_email,
+                             next_action_uri=next_action_uri)
 
 
 def init(app,
@@ -532,15 +627,9 @@ def init(app,
             Column('user_id', BigInteger(), nullable=False),
             Index('webauth_user_log_user_id', 'user_id'),
             Column('d', DateTime(timezone=True), nullable=False),
-            Column('event', VARCHAR(25), nullable=False),
+            Column('event', VARCHAR(1024), nullable=False),
             Column('ip', VARCHAR(45), nullable=False))
         meta.create_all(db.connect())
-
-    # TODO
-    # set email / password to oauth accounts
-    # change email
-    # change password
-    # cleanup kv and unconfirmed
 
     def handle_authorize(remote, token, user_info):
         if user_info:
@@ -625,5 +714,6 @@ def cleanup():
 
 external_actions = {
     'confirm.email': confirm_user,
-    'reset.password': reset_password
+    'reset.password': reset_password,
+    'remove.oldmail': remove_oldmail
 }

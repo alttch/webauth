@@ -1,0 +1,30 @@
+{% extends "default.j2" %}
+{% block title %}Set new password{% endblock %}
+{% block content %}
+  <div>
+    <div id="error" style="color: red"></div>
+    <form action="/set-email" name="f1" method="POST" onsubmit="event.preventDefault(); validate()">
+      E-Mail <input type="text" id="email" name="email" /><br />
+      {% if email %}
+        (confirmation link will be sent to both new email and your old email {{ email }}<br />
+      {% endif %}
+      <input type="submit" value="Set" />
+    </form>
+  </div>
+  <script>
+    document.getElementById("password").focus();
+    function validate() {
+      let err = '';
+      if (!document.getElementById('email').value) {
+        err = 'please fill email'
+      }
+      if (!err) {
+        document.forms["f1"].submit();
+        return true;
+      } else {
+        document.getElementById('error').innerHTML = err;
+        return false;
+      }
+    }
+  </script>
+{% endblock %}

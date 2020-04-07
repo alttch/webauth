@@ -1,4 +1,4 @@
 UPDATE webauth_user
-SET confirmed='1',
+SET confirmed='1', email=:email,
     d_active=:d
-WHERE id=:id and email=:email
+WHERE id=:id
