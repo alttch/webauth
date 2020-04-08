@@ -310,3 +310,5 @@ def test003_oauth_mixed():
     assert 'ERROR' in d.title
     click('next')
     click('delete-account')
+    click('login-github')
+    click('delete-account')
