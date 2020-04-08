@@ -204,6 +204,45 @@ Re-sending lost E-Mail confirmation link
        webauth.resend_email_confirm(next_action_uri='/user-area')
        return redirect('/user-area')
 
+E-Mail change
+=============
+
+.. code:: python
+
+   @app.route('/set-email', methods=['GET', 'POST'])
+   def set_email():
+       if webauth.is_authenticated():
+           if request.method == 'GET':
+               return '<SOME HTML>'
+           else:
+               email = request.form.get('email')
+               if email == webauth.get_user_email():
+                   return redirect('/dashboard')
+               try:
+                   webauth.change_user_email(
+                       email,
+                       # this URI will be displayed when user re-confirms
+                       # ownership of the old email address
+                       next_action_uri_oldaddr='/old-email-remove-ok',
+                       # this URI will be displayed with new email address
+                       # is confirmed
+                       # usually if no email is set currently, user should
+                       # be prompted to define password
+                       next_action_uri='/new-email-set-ok'
+                       if webauth.get_user_email() else '/set-password')
+                   return redirect('/user-area')
+               except webauth.ResourceAlreadyExists:
+                   return Response('E-mail is already in system', status=409)
+       else:
+           return redirect('/')
+
+If user currently has e-mail address set and confirmed, framework always sends
+e-mail change confirmation link to the current registered address. After
+address ownership is re-confirmed, confirmation email is automatically send to
+the new one.
+
+E-Mail address is changed when last confirmation link is clicked.
+
 Other nuts and bolts
 ====================
 
