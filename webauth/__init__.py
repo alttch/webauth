@@ -404,7 +404,7 @@ def is_confirmed_session():
     return session.get(f'{_d.x_prefix}user_confirmed_session', False)
 
 
-def clear_confirmed_session():
+def stop_confirmed_session():
     """
     Clear confirmed session
 

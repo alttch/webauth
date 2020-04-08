@@ -7,4 +7,5 @@ traditional and OAuth2 authentication.
 .. toctree::
    :maxdepth: 1
   
+   usage
    methods

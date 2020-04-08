@@ -215,6 +215,10 @@ def test002_register_login_logout():
     assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
     with pytest.raises(NoSuchElementException):
         d.find_element_by_id('resend-confirm')
+    # check password form
+    click('set-password')
+    with pytest.raises(NoSuchElementException):
+        d.find_element_by_id('oldpass')
     # logout
     logout()
     d.get('https://webauth-test.lab.altt.ch/dashboard')

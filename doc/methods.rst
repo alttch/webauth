@@ -1,5 +1,5 @@
-Class methods and variables
-===========================
+Framework methods and variables
+===============================
 
 .. automodule:: webauth
    :members:

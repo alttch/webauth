@@ -80,14 +80,14 @@ def dashboard():
 
 @app.route('/new-email-set-ok')
 def new_email_set_ok():
-    webauth.clear_confirmed_session()
+    webauth.stop_confirmed_session()
     return serve_tpl('ok',
                      message='New email address is set',
                      next_uri='/dashboard')
 
 @app.route('/remind-ok')
 def remind_ok():
-    webauth.clear_confirmed_session()
+    webauth.stop_confirmed_session()
     return serve_tpl('ok',
                      message='Please check your email for the info',
                      next_uri='/')
@@ -117,7 +117,7 @@ def set_password():
                                  message='old password is not valid',
                                  next_uri='/set-password')
             webauth.set_user_password(request.form.get('password'))
-            webauth.clear_confirmed_session()
+            webauth.stop_confirmed_session()
             return redirect('/dashboard')
     else:
         return redirect('/')
