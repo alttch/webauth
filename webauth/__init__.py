@@ -227,12 +227,15 @@ def check_user_password(password, allow_empty=False):
         password = ''
     user_id = get_user_id()
     if user_id:
-        if _d.db.query('user.password.check.orempty'
-                       if allow_empty else 'user.password.check',
-                       id=user_id,
-                       password=sha256(password.encode()).hexdigest()).rowcount:
+        try:
+            _d.db.query('user.password.check.orempty'
+                        if allow_empty else 'user.password.check',
+                        _cr=True,
+                        id=user_id,
+                        password=sha256(password.encode()).hexdigest())
             return True
-        logger.warning(f'user password check failed for {user_id}')
+        except LookupError:
+            logger.warning(f'user password check failed for {user_id}')
     raise AccessDenied
 
 
@@ -248,11 +251,10 @@ def set_user_password(password):
     """
     user_id = get_user_id()
     if user_id:
-        if not _d.db.query('user.password.set',
-                           id=user_id,
-                           password=sha256(
-                               password.encode()).hexdigest()).rowcount:
-            raise LookupError
+        _d.db.query('user.password.set',
+                    _cr=True,
+                    id=user_id,
+                    password=sha256(password.encode()).hexdigest())
         _log_user_event('password.change')
     else:
         raise AccessDenied
@@ -280,18 +282,20 @@ def change_user_email(email, next_action_uri_oldaddr=None,
     """
     user_id = get_user_id()
     if user_id:
-        if _d.db.query('user.select.id', email=email).rowcount:
+        try:
+            _d.db.qlookup('user.select.id', email=email)
             raise ResourceAlreadyExists
-        old_email = get_user_email()
-        _log_user_event(f'email.change:{old_email}:{email}')
-        if old_email and is_confirmed():
-            _send_email_change_old_addr(user_id, old_email, email,
-                                        next_action_uri_oldaddr,
-                                        next_action_uri)
-        else:
-            confirm_email_ownership(user_id=user_id,
-                                    email=email,
-                                    next_action_uri=next_action_uri)
+        except LookupError:
+            old_email = get_user_email()
+            _log_user_event(f'email.change:{old_email}:{email}')
+            if old_email and is_confirmed():
+                _send_email_change_old_addr(user_id, old_email, email,
+                                            next_action_uri_oldaddr,
+                                            next_action_uri)
+            else:
+                confirm_email_ownership(user_id=user_id,
+                                        email=email,
+                                        next_action_uri=next_action_uri)
     else:
         raise AccessDenied
 
@@ -307,10 +311,7 @@ def get_user_providers():
     """
     user_id = get_user_id()
     if user_id:
-        return [
-            dict(row)
-            for row in _d.db.query('user.provider.list', id=user_id).fetchall()
-        ]
+        return _d.db.qlist('user.provider.list', id=user_id)
     else:
         raise AccessDenied
 
@@ -337,10 +338,11 @@ def delete_user_provider(provider, sub):
                                                 sub=sub).fetchone().c < 1:
             raise ResourceBusy
         else:
-            if not _d.db.query(
-                    'user.provider.delete', id=user_id, provider=provider,
-                    sub=sub).rowcount:
-                raise LookupError
+            _d.db.query('user.provider.delete',
+                        _cr=True,
+                        id=user_id,
+                        provider=provider,
+                        sub=sub)
     else:
         raise AccessDenied
 
@@ -359,8 +361,7 @@ def delete_user():
     if user_id:
         _log_user_event('account.delete')
         _call_handler('account.delete', user_id=user_id)
-        if not _d.db.query('user.delete', id=user_id).rowcount:
-            raise LookupError
+        _d.db.query('user.delete', _cr=True, id=user_id)
         return logout()
     else:
         raise AccessDenied
@@ -418,14 +419,19 @@ def stop_confirmed_session():
 
 def _handle_user_auth(user_info, provider):
     user_id = get_user_id()
-    result = _d.db.query('user.oauth.get', sub=user_info.sub,
-                         provider=provider).fetchone()
-    if result is None:
+    try:
+        user = _d.db.qlookup('user.oauth.get',
+                             sub=user_info.sub,
+                             provider=provider)
+        if user_id and user['id'] != user_id:
+            raise ResourceAlreadyExists
+        else:
+            user_id = user['id']
+    except LookupError:
         if not user_id:
             if allow_registration:
-                user_id = _d.db.query(
-                    'user.create.empty',
-                    d_created=datetime.datetime.now()).fetchone().id
+                user_id = _d.db.qcreate('user.create.empty',
+                                        d_created=datetime.datetime.now())
             else:
                 raise AccessDenied
         _d.db.query('user.provider.create',
@@ -435,11 +441,6 @@ def _handle_user_auth(user_info, provider):
                     name=user_info.name)
         _log_user_event('account.register', user_id=user_id)
         _call_handler('account.register', user_id=user_id, user_info=user_info)
-    else:
-        if user_id and result.id != user_id:
-            raise ResourceAlreadyExists
-        else:
-            user_id = result.id
     return user_id
 
 
@@ -574,12 +575,12 @@ def register(email, password, confirmed=True, next_action_uri=None):
     """
     if allow_registration:
         try:
-            user_id = _d.db.query("user.create",
-                                  email=email,
-                                  password=sha256(
-                                      password.encode()).hexdigest(),
-                                  d_created=datetime.datetime.now(),
-                                  confirmed=confirmed).fetchone().id
+            user_id = _d.db.qcreate('user.create',
+                                    email=email,
+                                    password=sha256(
+                                        password.encode()).hexdigest(),
+                                    d_created=datetime.datetime.now(),
+                                    confirmed=confirmed)
         except sqlalchemy.exc.IntegrityError as e:
             raise ResourceAlreadyExists(e)
         session[f'{_d.x_prefix}user_id'] = user_id
@@ -602,11 +603,10 @@ def get_user_email():
     Raises:
         webauth.AccessDenied: if user no longer exists in database
     """
-    user = _d.db.query("user.select.email",
-                       id=session[f'{_d.x_prefix}user_id']).fetchone()
-    if user:
-        return user.email
-    else:
+    try:
+        return _d.db.qlookup('user.select.email',
+                             id=session[f'{_d.x_prefix}user_id'])['email']
+    except LookupError:
         raise AccessDenied
 
 
@@ -633,15 +633,12 @@ def send_account_remind(email, next_action_uri=None):
     Raises:
         LookupError: user not found
     """
-    user = _d.db.query("user.select.id", email=email).fetchone()
-    if user:
-        _call_handler('account.remind', user_id=user.id)
-        _log_user_event(f'account.remind:{email}', user_id=user.id)
-        _send_reset_email(user_id=user.id,
-                          email=email,
-                          next_action_uri=next_action_uri)
-    else:
-        raise LookupError
+    user_id = _d.db.qlookup('user.select.id', email=email)['id']
+    _call_handler('account.remind', user_id=user_id)
+    _log_user_event(f'account.remind:{email}', user_id=user_id)
+    _send_reset_email(user_id=user_id,
+                      email=email,
+                      next_action_uri=next_action_uri)
 
 
 def login(email, password):
@@ -654,17 +651,16 @@ def login(email, password):
     Raises:
         webauth.AccessDenied: invalid credentials
     """
-    user = _d.db.query("user.select.id.bypassword",
-                       email=email,
-                       password=sha256(
-                           password.encode()).hexdigest()).fetchone()
-    if user:
-        touch(user.id)
-        session[f'{_d.x_prefix}user_id'] = user.id
-        session[f'{_d.x_prefix}user_confirmed'] = user.confirmed
-        _call_handler('account.login', user_id=user.id)
+    try:
+        user = _d.db.qlookup('user.select.id.bypassword',
+                             email=email,
+                             password=sha256(password.encode()).hexdigest())
+        touch(user['id'])
+        session[f'{_d.x_prefix}user_id'] = user['id']
+        session[f'{_d.x_prefix}user_confirmed'] = user['confirmed']
+        _call_handler('account.login', user_id=user['id'])
         _log_user_event('account.login')
-    else:
+    except LookupError:
         raise AccessDenied
 
 
@@ -703,11 +699,11 @@ def handle_confirm(key):
 
 
 def _confirm_user(user_id, email, _log=True):
-    if not _d.db.query('user.confirm.email',
-                       id=user_id,
-                       email=email,
-                       d=datetime.datetime.now()).rowcount:
-        raise LookupError
+    _d.db.query('user.confirm.email',
+                _cr=True,
+                id=user_id,
+                email=email,
+                d=datetime.datetime.now())
     session[f'{_d.x_prefix}user_id'] = user_id
     session[f'{_d.x_prefix}user_confirmed'] = True
     session[f'{_d.x_prefix}user_confirmed_session'] = True

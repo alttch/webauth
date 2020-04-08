@@ -7,8 +7,7 @@ Framework initialization
 WebaAuth uses database and SMTP wrappers from `pyaltt2
 <https://github.com/alttch/pyaltt2>`_ common functions library.
 
-Currently WebAuth supports only PostgreSQL and Oracle. Databases, which support
-*RETURNING* method, may also work.
+Currently WebAuth is tested with PostgreSQL only.
 
 Code example
 ------------
