@@ -5,7 +5,7 @@
     <div id="error" style="color: red"></div>
     <form action="/set-email" name="f1" method="POST" onsubmit="event.preventDefault(); validate()">
       E-Mail <input type="text" id="email" name="email" /><br />
-      {% if email %}
+      {% if email and confirmed %}
         (confirmation link will be sent to both new email and your old email {{ email }}<br />
       {% endif %}
       <input type="submit" id="submit_change" value="Set" />

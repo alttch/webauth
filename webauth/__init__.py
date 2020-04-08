@@ -284,7 +284,7 @@ def change_user_email(email, next_action_uri_oldaddr=None,
             raise ResourceAlreadyExists
         old_email = get_user_email()
         _log_user_event(f'email.change:{old_email}:{email}')
-        if old_email:
+        if old_email and is_confirmed():
             _send_email_change_old_addr(user_id, old_email, email,
                                         next_action_uri_oldaddr,
                                         next_action_uri)
