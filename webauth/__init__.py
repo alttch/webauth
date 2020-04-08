@@ -776,7 +776,7 @@ def init(app,
             Column('d_created', DateTime(timezone=True), nullable=False),
             Column('d_active', DateTime(timezone=True), nullable=True),
             Column('confirmed', Boolean, nullable=False, server_default='0'),
-            Column('otp', Numeric(2, 0), nullable=False, server_default='0'),
+            Column('otp', Numeric(1, 0), nullable=False, server_default='0'),
             Column('otp_secret', CHAR(16), nullable=True))
         user_auth = Table(
             f'webauth_user_auth', meta,
