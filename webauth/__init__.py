@@ -749,8 +749,7 @@ def init(app,
         app.config['SECRET_KEY'] = gen_random_str()
 
     _d.x_prefix, _d.dot_prefix = _format_prefix(base_prefix)
-    _d.db = db.clone()
-    _d.db.rq_func = rq
+    _d.db = db.clone(rq_func=rq)
     _d.kv = KVStorage(db=db, table_name='webauth_kv')
     _d.root_uri = root_uri
     _d.smtp = smtp
