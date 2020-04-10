@@ -242,6 +242,45 @@ the new one.
 
 E-Mail address is changed when last confirmation link is clicked.
 
+Working with API keys
+=====================
+
+The framework automatically generates 32-character random API keys for all
+registered users. It's completely up to you use them or not.
+
+Using API key
+-------------
+
+Consider you have API call, the call URL is requested without an open session.
+Use the following code to authenticate user:
+
+.. code:: python
+
+   @app.route('/api/somecall')
+   def some_api_call():
+      try:
+         user = webauth.get_user_by_api_key(request.headers.get('X-API-Key'))
+         # user dict contains all fields from webauth_user table, except
+         # password and otp_secret
+      except LookupError
+         abort(403)
+      result = do_something(user_id=user['id'])
+      return result
+
+Displaying API key to user
+--------------------------
+
+When you consider the user session environment as safe (e.g. re-check user
+password), use *webauth.get_user_api_key()* method to obtain current API key of
+the logged in user.
+
+Regenerating API KEY
+--------------------
+
+API key can be regenerated at any time when user is logged in. Use method
+*webauth.regenerate_api_key()*. The method returns new generated API key as
+well the key is automatically updated in the database.
+
 Other nuts and bolts
 ====================
 
