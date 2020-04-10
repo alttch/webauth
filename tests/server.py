@@ -5,7 +5,7 @@ import webauth
 import os
 import sqlalchemy
 import jinja2
-from flask import Flask, redirect, request
+from flask import Flask, redirect, request, jsonify, abort
 from pyaltt2.config import load_yaml
 from pyaltt2.db import Database
 from pyaltt2.mail import SMTP
@@ -73,7 +73,8 @@ def dashboard():
     if webauth.is_authenticated():
         return serve_tpl('dashboard',
                          providers=webauth.get_user_providers(),
-                         email=webauth.get_user_email())
+                         email=webauth.get_user_email(),
+                         api_key=webauth.get_user_api_key())
     else:
         return redirect('/')
 
@@ -85,12 +86,14 @@ def new_email_set_ok():
                      message='New email address is set',
                      next_uri='/dashboard')
 
+
 @app.route('/remind-ok')
 def remind_ok():
     webauth.stop_confirmed_session()
     return serve_tpl('ok',
                      message='Please check your email for the info',
                      next_uri='/')
+
 
 @app.route('/old-email-remove-ok')
 def old_email_remove_ok():
@@ -184,6 +187,29 @@ def delete_provider():
                          next_uri='/dashboard')
     except webauth.AccessDenied:
         return serve_tpl('error', message='Access denied', next_uri='/')
+
+
+@app.route('/check-user-api-key')
+def check_user_api_key():
+    try:
+        k = request.args.get('k')
+        i = int(request.args.get('id'))
+        user = webauth.get_user_by_api_key(k)
+        if user['id'] != i:
+            raise LookupError
+        return jsonify(dict(ok=True))
+    except:
+        raise
+        abort(403)
+
+
+@app.route('/regenerate-api-key')
+def regenerate_api_key():
+    if webauth.is_authenticated():
+        webauth.regenerate_user_api_key()
+        return redirect('/dashboard')
+    else:
+        abort(403)
 
 
 @app.route('/delete-account')

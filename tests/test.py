@@ -7,6 +7,7 @@ import re
 import signal
 import logging
 import email
+import requests
 from poplib import POP3
 from pyaltt2.db import Database
 from pyaltt2.config import load_yaml
@@ -95,6 +96,10 @@ def click(elem):
                     raise TimeoutError
         except NoSuchElementException:
             pass
+
+
+def get_innerhtml(elem):
+    return _d.driver.find_element_by_id(elem).get_attribute('innerHTML')
 
 
 def fill(elem, value):
@@ -315,4 +320,28 @@ def test003_oauth_mixed():
     click('next')
     click('delete-account')
     click('login-github')
+    click('delete-account')
+
+
+def test004_apikey():
+    d = _d.driver
+
+    def check_api_key():
+        assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
+        user_id = get_innerhtml('user_id')
+        api_key = get_innerhtml('api_key')
+        r = requests.get('https://webauth-test.lab.altt.ch'
+                         f'/check-user-api-key?k={api_key}&id={user_id}')
+        assert r.ok
+        assert r.json()['ok']
+
+    # register
+    clear_pop3()
+    fill_register(config['email'][0], '123')
+    assert d.current_url == 'https://webauth-test.lab.altt.ch/dashboard'
+    d.get(get_pop3_link())
+    check_api_key()
+    for i in range(5):
+        click('regenerate_api_key')
+        check_api_key()
     click('delete-account')

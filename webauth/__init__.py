@@ -260,6 +260,26 @@ def set_user_password(password):
         raise AccessDenied
 
 
+def regenerate_user_api_key():
+    """
+    Generate new API key for user
+
+    Returns:
+        new API key
+    Raises:
+        LookupError: user not found
+        webauth.AccessDenied: user is not logged in
+    """
+    user_id = get_user_id()
+    if user_id:
+        k = gen_random_str()
+        _d.db.query('user.api_key.set', _cr=True, id=user_id, api_key=k)
+        _log_user_event('api_key.change')
+        return k
+    else:
+        raise AccessDenied
+
+
 def change_user_email(email, next_action_uri_oldaddr=None,
                       next_action_uri=None):
     """
@@ -431,6 +451,7 @@ def _handle_user_auth(user_info, provider):
         if not user_id:
             if allow_registration:
                 user_id = _d.db.qcreate('user.create.empty',
+                                        api_key=gen_random_str(),
                                         d_created=datetime.datetime.now())
             else:
                 raise AccessDenied
@@ -579,6 +600,7 @@ def register(email, password, confirmed=True, next_action_uri=None):
                                     email=email,
                                     password=sha256(
                                         password.encode()).hexdigest(),
+                                    api_key=gen_random_str(),
                                     d_created=datetime.datetime.now(),
                                     confirmed=confirmed)
         except sqlalchemy.exc.IntegrityError as e:
@@ -604,10 +626,28 @@ def get_user_email():
         webauth.AccessDenied: if user no longer exists in database
     """
     try:
-        return _d.db.qlookup('user.select.email',
+        return _d.db.qlookup('user.get.email',
                              id=session[f'{_d.x_prefix}user_id'])['email']
     except LookupError:
         raise AccessDenied
+
+
+def get_user_api_key():
+    """
+    Get API key of current user
+
+    Raises:
+        webauth.AccessDenied: if user no longer exists in database
+    """
+    try:
+        return _d.db.qlookup('user.get.api_key',
+                             id=session[f'{_d.x_prefix}user_id'])['api_key']
+    except LookupError:
+        raise AccessDenied
+
+
+def get_user_by_api_key(api_key):
+    return _d.db.qlookup('user.select.byapi_key', api_key=api_key)
 
 
 def resend_email_confirm(next_action_uri=None):
@@ -767,7 +807,9 @@ def init(app,
             'webauth_user', meta,
             Column('id', BigInteger(), primary_key=True, autoincrement=True),
             Column('email', VARCHAR(255), nullable=True, unique=True),
-            Column('password', VARCHAR(64), nullable=True),
+            Column('password', CHAR(64), nullable=True),
+            Column('api_key', CHAR(32), nullable=True, unique=True),
+            Index('webauth_user_api_key', 'api_key'),
             Column('d_created', DateTime(timezone=True), nullable=False),
             Column('d_active', DateTime(timezone=True), nullable=True),
             Column('confirmed', Boolean, nullable=False, server_default='0'),
