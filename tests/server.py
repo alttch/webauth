@@ -36,11 +36,15 @@ webauth.register_handler(
 
 def serve_tpl(tpl_file, **kwargs):
     tpl = tenv.get_template(f'{tpl_file}.j2')
+    name = webauth.get_user_name()
+    if not name:
+        name = webauth.get_user_email()
     d = {
         'authenticated': webauth.is_authenticated(),
         'uid': webauth.get_user_id(),
         'confirmed': webauth.is_confirmed(),
-        'picture': webauth.get_user_picture()
+        'picture': webauth.get_user_picture(),
+        'name': name
     }
     d.update(kwargs)
     return tpl.render(d)

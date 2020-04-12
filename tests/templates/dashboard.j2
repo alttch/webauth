@@ -4,6 +4,7 @@
   {% if picture %}
     <img class="avatar" src="{{ picture }}" />
   {% endif %}
+  Logged in as: {{ name }},
   Your user id is: <span id="user_id">{{ uid }}</span>,
   API key: <span id="api_key">{{ api_key }}</span>
   <input type="button" id="regenerate_api_key" value="change" onclick='document.location="/regenerate-api-key"' />

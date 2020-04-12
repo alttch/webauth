@@ -1,7 +1,7 @@
 __author__ = 'Altertech, https://www.altertech.com/'
 __copyright__ = 'Copyright (C) 2020 Altertech'
 __license__ = 'MIT'
-__version__ = '0.0.12'
+__version__ = '0.0.13'
 
 # TODO: 2fa
 
@@ -396,9 +396,16 @@ def get_user_id():
 
 def get_user_picture():
     """
-    Get picture of current logged in user
+    Get picture of current logged in user (OAuth login only)
     """
     return session.get(f'{_d.x_prefix}user_picture')
+
+
+def get_user_name():
+    """
+    Get name of current logged in user (OAuth login only)
+    """
+    return session.get(f'{_d.x_prefix}user_name')
 
 
 def is_authenticated():
@@ -621,15 +628,12 @@ def register(email, password, confirmed=True, next_action_uri=None):
 def get_user_email():
     """
     Get email address of current user
-
-    Raises:
-        webauth.AccessDenied: if user no longer exists in database
     """
     try:
         return _d.db.qlookup('user.get.email',
                              id=session[f'{_d.x_prefix}user_id'])['email']
     except LookupError:
-        raise AccessDenied
+        return None
 
 
 def get_user_api_key():
@@ -848,6 +852,7 @@ def init(app,
                 touch(user_id)
                 session[f'{_d.x_prefix}user_id'] = user_id
                 session[f'{_d.x_prefix}user_picture'] = user_info.picture
+                session[f'{_d.x_prefix}user_name'] = user_info.name
                 session[f'{_d.x_prefix}user_confirmed'] = True
                 _call_handler('account.login', user_id=user_id)
                 _log_user_event(f'account.login:{provider}')
