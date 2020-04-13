@@ -462,11 +462,13 @@ def _handle_user_auth(user_info, provider):
                                         d_created=datetime.datetime.now())
             else:
                 raise AccessDenied
+        name = user_info.preferred_username if provider == 'github' \
+                else user_info.name
         _d.db.query('user.provider.create',
                     id=user_id,
                     provider=provider,
                     sub=user_info.sub,
-                    name=user_info.name)
+                    name=name)
         _log_user_event('account.register', user_id=user_id)
         _call_handler('account.register', user_id=user_id, user_info=user_info)
     return user_id
