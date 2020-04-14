@@ -242,6 +242,17 @@ the new one.
 
 E-Mail address is changed when last confirmation link is clicked.
 
+Adding more OAuth providers to user account
+===========================================
+
+The logic is very simple:
+
+* When user IS NOT logged in, URI */auth/<provider>/login* (default) creates
+  new user account.
+
+* When user IS logged in, URI */auth/<provider>/login* (default) appends new
+  OAuth2 authentication method to his account.
+
 Working with API keys
 =====================
 
