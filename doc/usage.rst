@@ -79,8 +79,11 @@ Registration with E-Mail and password
        email = request.form.get('email')
        password = request.form.get('password')
        try:
-            webauth.register(email, password, confirmed=False)
+            webauth.register(email, password, confirmed=False,
+               next_action_uri='/dashboard')
             # user is registered, redirecting to user area
+            # after clicking confirmation link in e-mail - redirect to
+            # /dashboard
             return redirect('/user-area')
        except webauth.ResourceAlreadyExists:
             # return Flask error or some error page
