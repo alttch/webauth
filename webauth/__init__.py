@@ -515,7 +515,7 @@ def logout():
     if get_user_id():
         result = _call_handler('account.logout')
         _log_user_event('account.logout')
-        for i in ('id', 'picture', 'confirmed', 'confirmed_session'):
+        for i in ('id', 'picture', 'name', 'confirmed', 'confirmed_session'):
             try:
                 del session[f'{_d.x_prefix}user_{i}']
             except KeyError:
