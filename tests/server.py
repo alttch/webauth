@@ -20,7 +20,7 @@ config = load_yaml(os.getenv('WEBAUTH_CONFIG', 'config.yml'))
 
 app = Flask(__name__)
 
-db = Database('postgresql://test:123@localhost/test')
+db = Database(os.getenv('WEBAUTH_DBCONN'))
 
 webauth.init(app, db=db, config=config, smtp=SMTP(host='10.90.1.8'))
 webauth.user_unconfirmed_expires = 10
