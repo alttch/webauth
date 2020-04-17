@@ -591,7 +591,11 @@ def confirm_email_ownership(email,
                      html=tpl['html'].format(action_link=link))
 
 
-def register(email, password, confirmed=True, next_action_uri=None):
+def register(email,
+             password,
+             confirmed=True,
+             next_action_uri=None,
+             _invoke_handler=True):
     """
     Register new user in traditional way
 
@@ -617,6 +621,8 @@ def register(email, password, confirmed=True, next_action_uri=None):
         session[f'{_d.x_prefix}user_id'] = user_id
         session[f'{_d.x_prefix}user_confirmed'] = confirmed
         _log_user_event('account.register', user_id=user_id)
+        if _invoke_handler:
+            _call_handler('account.register', user_id=user_id)
         if not confirmed:
             confirm_email_ownership(user_id=user_id,
                                     email=email,
