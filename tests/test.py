@@ -19,9 +19,9 @@ from selenium.common.exceptions import NoSuchElementException
 pidfile = '/tmp/webauth-server-test.pid'
 logfile = '/tmp/webauth-server-test.log'
 
-db = Database('postgresql://test:123@localhost/test')
+config = load_yaml(os.getenv('TEST_CONFIG', 'test-data.yml'))
 
-config = load_yaml('test-data.yml')
+db = Database(config['dbconn'])
 
 _d = SimpleNamespace()
 
@@ -132,7 +132,7 @@ def init():
         os.unlink(logfile)
     except:
         pass
-    if os.system('WEBAUTH_CONFIG=test.yml '
+    if os.system(f'WEBAUTH_CONFIG={config["webauth-config"]} '
                  'gunicorn -D -b 0.0.0.0:8449 --log-level DEBUG '
                  f'--pid {pidfile} --log-file {logfile} server:app'):
         raise RuntimeError('failed to start server')
