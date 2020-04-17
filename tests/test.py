@@ -132,7 +132,7 @@ def init():
         os.unlink(logfile)
     except:
         pass
-    if os.system(f'WEBAUTH_CONFIG={config["webauth-config"]} '
+    if os.system(f'WEBAUTH_CONFIG={config["app-config"]} '
                  'gunicorn -D -b 0.0.0.0:8449 --log-level DEBUG '
                  f'--pid {pidfile} --log-file {logfile} server:app'):
         raise RuntimeError('failed to start server')
