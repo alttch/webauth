@@ -1,4 +1,4 @@
-VERSION=0.0.16
+VERSION=0.0.17
 
 all:
 	@echo "what do you want to build today?"
@@ -13,7 +13,7 @@ build:
 	python3 setup.py sdist
 
 pub:
-	@echo "please use 'jks build webauth'"
+	jks build webauth
 
 pub-test:
 	twine upload -r test dist/*
