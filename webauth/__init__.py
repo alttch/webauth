@@ -444,6 +444,13 @@ def stop_confirmed_session():
         pass
 
 
+def _get_oauth_user_name(user_info, provider):
+    name = user_info.name
+    if not name and provider == 'github':
+        name = user_info.preferred_username
+    return name
+
+
 def _handle_user_auth(user_info, provider):
     user_id = get_user_id()
     try:
@@ -454,6 +461,11 @@ def _handle_user_auth(user_info, provider):
             raise ResourceAlreadyExists
         else:
             user_id = user['id']
+            _d.db.query('user.provider.update.name',
+                        id=user_id,
+                        provider=provider,
+                        sub=user_info.sub,
+                        name=_get_oauth_user_name(user_info, provider))
     except LookupError:
         if not user_id:
             if allow_registration:
@@ -462,13 +474,11 @@ def _handle_user_auth(user_info, provider):
                                         d_created=datetime.datetime.now())
             else:
                 raise AccessDenied
-        name = user_info.preferred_username if provider == 'github' \
-                else user_info.name
         _d.db.query('user.provider.create',
                     id=user_id,
                     provider=provider,
                     sub=user_info.sub,
-                    name=name)
+                    name=_get_oauth_user_name(user_info, provider))
         _log_user_event('account.register', user_id=user_id)
         _call_handler('account.register', user_id=user_id, user_info=user_info)
     return user_id
@@ -860,7 +870,8 @@ def init(app,
                 touch(user_id)
                 session[f'{_d.x_prefix}user_id'] = user_id
                 session[f'{_d.x_prefix}user_picture'] = user_info.picture
-                session[f'{_d.x_prefix}user_name'] = user_info.name
+                session[f'{_d.x_prefix}user_name'] = _get_oauth_user_name(
+                    user_info, provider)
                 session[f'{_d.x_prefix}user_confirmed'] = True
                 _call_handler('account.login', user_id=user_id)
                 _log_user_event(f'account.login:{provider}')
