@@ -18,8 +18,8 @@ setuptools.setup(
     include_package_data=True,
     license='MIT',
     install_requires=[
-        'pyaltt2>=0.0.85', 'flask', 'loginpass', 'authlib', 'sqlalchemy',
-        'msgpack'
+        'pyaltt2>=0.0.85', 'flask', 'loginpass', 'authlib==0.14.1',
+        'sqlalchemy', 'msgpack'
     ],
     classifiers=(
         'Programming Language :: Python :: 3',
