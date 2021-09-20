@@ -1,7 +1,7 @@
 __author__ = 'Altertech, https://www.altertech.com/'
 __copyright__ = 'Copyright (C) 2020 Altertech'
 __license__ = 'MIT'
-__version__ = '0.0.17'
+__version__ = '0.0.18'
 
 # TODO: 2fa
 
