@@ -1,4 +1,4 @@
-__version__ = '0.0.18'
+__version__ = '0.0.19'
 
 import setuptools
 
@@ -18,7 +18,7 @@ setuptools.setup(
     include_package_data=True,
     license='MIT',
     install_requires=[
-        'pyaltt2>=0.0.85', 'flask', 'loginpass', 'authlib==0.14.1',
+        'pyaltt2>=0.0.85', 'flask', 'loginpass==0.4', 'authlib==0.14.1',
         'sqlalchemy', 'msgpack'
     ],
     classifiers=(
