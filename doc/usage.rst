@@ -28,7 +28,8 @@ Code example
    app = Flask(__name__)
 
    # create database
-   from pyaltt2.db import Database, SMTP
+   from pyaltt2.db import Database
+   from pyaltt2.mail import SMTP
    db = Database('postgresql://test:123@localhost/test')
    smtp = SMTP(host='localhost')
    webauth.init(app, db=db, config=config, smtp=smtp)
